@@ -55,7 +55,7 @@ const ASSETS_TO_WATCH = [
         spikeThreshold: 3.0,      
         trendThreshold: 2.0,      
         enabled: true,
-        newsEnabled: false         // 🔥 뉴스 검색 활성화/비활성화
+        newsEnabled: true         // 🔥 뉴스 검색 활성화/비활성화
     },
      { 
         name: '이더리움',   
@@ -738,120 +738,152 @@ async function sendPriceAlertFlexMessage(asset, currentPrice, alertReason, alert
     await sendFlexNotification(flexMessage);
 }
 
+// 기존 중복된 sendNewsFlexMessage 함수들을 모두 제거하고 이것으로 교체
+
 // 🎯 뉴스 알림을 Flex Message로 전송하는 함수 (footer 링크 추가)
 async function sendNewsFlexMessage(newsItem) {
-    console.log('📤 뉴스 알림 Flex Message 전송 시도...');
+    console.log(`\n📤 [${newsItem.searchedAsset}] Flex Message 뉴스 알림 발송 시작...`);
     
-    // 한국 시간 가져오기
-    const now = new Date();
-    const kstTime = now.toLocaleString('ko-KR', {
-        timeZone: 'Asia/Seoul',
-        year: 'numeric',
-        month: 'numeric',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: 'numeric',
-        second: 'numeric',
-        hour12: true
-    });
-    
-    // 제목과 설명 길이 제한 (Flex Message용)
-    const title = newsItem.title.length > 80 ? newsItem.title.substring(0, 77) + '...' : newsItem.title;
-    const description = newsItem.description.length > 150 ? newsItem.description.substring(0, 147) + '...' : newsItem.description;
-    
-    // 🎯 뉴스 Flex Message 구조 (보라색, footer 링크 추가)
     const flexMessage = {
-        "content": {
-            "type": "flex",
-            "altText": `📰 [새뉴스: ${newsItem.searchedAsset}] ${title}`,
-            "contents": {
-                "type": "bubble",
-                "size": "mega",
-                "header": {
-                    "type": "box",
-                    "layout": "vertical",
-                    "contents": [
-                        {
-                            "type": "text",
-                            "text": "📰 새로운 뉴스",
-                            "weight": "bold",
-                            "size": "lg",
-                            "color": "#FFFFFF"
-                        },
-                        {
-                            "type": "text",
-                            "text": `🎯 ${newsItem.searchedAsset} 관련`,
-                            "size": "sm",
-                            "color": "#E0E0E0"
-                        }
-                    ],
-                    "backgroundColor": "#8B5CF6", // 보라색
-                    "paddingAll": "15px"
-                },
-                "body": {
-                    "type": "box",
-                    "layout": "vertical",
-                    "spacing": "md",
-                    "contents": [
-                        {
-                            "type": "text",
-                            "text": title,
-                            "wrap": true,
-                            "size": "md",
-                            "weight": "bold",
-                            "color": "#222222"
-                        },
-                        {
-                            "type": "text",
-                            "text": `📍 ${newsItem.press} | ${newsItem.time}`,
-                            "wrap": true,
-                            "size": "xs",
-                            "color": "#666666"
-                        },
-                        {
-                            "type": "text",
-                            "text": `💬 ${description}`,
-                            "wrap": true,
-                            "size": "sm",
-                            "color": "#333333"
-                        },
-                        {
-                            "type": "separator",
-                            "margin": "md"
-                        },
-                        {
-                            "type": "text",
-                            "text": `⏰ ${kstTime}`,
-                            "size": "xs",
-                            "color": "#888888",
-                            "align": "end",
-                            "margin": "sm"
-                        }
-                    ]
-                },
-                "footer": {
-                    "type": "box",
-                    "layout": "vertical",
-                    "spacing": "sm",
-                    "contents": [
-                        {
-                            "type": "button",
-                            "style": "primary",
-                            "color": "#8B5CF6",
-                            "height": "sm",
-                            "action": {
-                                "type": "uri",
-                                "label": "📖 전체 기사 보기",
-                                "uri": newsItem.link
+        type: 'flex',
+        altText: `📰 [${newsItem.searchedAsset}] ${newsItem.title}`,
+        contents: {
+            type: 'bubble',
+            size: 'mega',
+            header: {
+                type: 'box',
+                layout: 'vertical',
+                paddingTop: 'md',
+                paddingBottom: 'sm',
+                backgroundColor: '#1E3A8A',
+                contents: [
+                    {
+                        type: 'text',
+                        text: '📰 뉴스 알림',
+                        color: '#FFFFFF',
+                        weight: 'bold',
+                        size: 'md'
+                    },
+                    {
+                        type: 'text',
+                        text: `🎯 ${newsItem.searchedAsset}`,
+                        color: '#93C5FD',
+                        size: 'sm',
+                        margin: 'xs'
+                    }
+                ]
+            },
+            body: {
+                type: 'box',
+                layout: 'vertical',
+                paddingAll: 'md',
+                contents: [
+                    {
+                        type: 'text',
+                        text: newsItem.title,
+                        weight: 'bold',
+                        size: 'md',
+                        wrap: true,
+                        color: '#1F2937'
+                    },
+                    {
+                        type: 'separator',
+                        margin: 'md'
+                    },
+                    {
+                        type: 'box',
+                        layout: 'vertical',
+                        margin: 'md',
+                        contents: [
+                            {
+                                type: 'box',
+                                layout: 'baseline',
+                                contents: [
+                                    {
+                                        type: 'text',
+                                        text: '📰',
+                                        size: 'sm',
+                                        flex: 0
+                                    },
+                                    {
+                                        type: 'text',
+                                        text: newsItem.press,
+                                        size: 'sm',
+                                        color: '#6B7280',
+                                        margin: 'sm',
+                                        flex: 1
+                                    }
+                                ]
+                            },
+                            {
+                                type: 'box',
+                                layout: 'baseline',
+                                margin: 'sm',
+                                contents: [
+                                    {
+                                        type: 'text',
+                                        text: '⏰',
+                                        size: 'sm',
+                                        flex: 0
+                                    },
+                                    {
+                                        type: 'text',
+                                        text: newsItem.time,
+                                        size: 'sm',
+                                        color: '#6B7280',
+                                        margin: 'sm',
+                                        flex: 1
+                                    }
+                                ]
                             }
+                        ]
+                    },
+                    {
+                        type: 'text',
+                        text: newsItem.description.length > 200 ? 
+                              newsItem.description.substring(0, 200) + '...' : 
+                              newsItem.description,
+                        size: 'sm',
+                        color: '#4B5563',
+                        margin: 'md',
+                        wrap: true
+                    }
+                ]
+            },
+            footer: {
+                type: 'box',
+                layout: 'vertical',
+                spacing: 'sm',
+                contents: [
+                    {
+                        type: 'button',
+                        style: 'primary',
+                        color: '#8B5CF6',
+                        height: 'sm',
+                        action: {
+                            type: 'uri',
+                            label: '📰 뉴스 전문 보기',
+                            uri: newsItem.link
                         }
-                    ]
-                }
+                    }
+                ]
             }
         }
     };
     
-    await sendFlexNotification(flexMessage);
+    try {
+        await sendFlexNotification(flexMessage);
+        console.log(`✅ [${newsItem.searchedAsset}] Flex 뉴스 알림 발송 완료!`);
+    } catch (error) {
+        console.error(`❌ [${newsItem.searchedAsset}] Flex 뉴스 알림 발송 실패:`, error.message);
+        // 실패 시 일반 텍스트로 대체 발송
+        const fallbackMessage = `📰 [${newsItem.searchedAsset}] ${newsItem.title}\n\n` +
+                               `📰 ${newsItem.press} | ⏰ ${newsItem.time}\n\n` +
+                               `${newsItem.description.substring(0, 100)}...\n\n` +
+                               `🔗 ${newsItem.link}`;
+        await sendNotification(fallbackMessage);
+        console.log(`✅ [${newsItem.searchedAsset}] 대체 텍스트 뉴스 알림 발송 완료!`);
+    }
 }
 
 async function fetchWithCurl(url, options = { isJson: true }) { 
@@ -876,7 +908,7 @@ async function fetchWithCurl(url, options = { isJson: true }) {
 }
 
 // 실제 뉴스 날짜 검증 (시간 표현 기반)
-function isNewsRecentByTime(timeText, maxAgeHours = MAX_NEWS_AGE_HOURS) {
+function isNewsRecentByTime(timeText, maxAgeHours = 6) {
     try {
         console.log(`⏰ 시간 텍스트 분석: "${timeText}"`);
         
@@ -917,7 +949,6 @@ function isNewsRecentByTime(timeText, maxAgeHours = MAX_NEWS_AGE_HOURS) {
         return false;
     }
 }
-
 // 뉴스 중복 체크
 function isNewsAlreadySent(newsItem, newsHistory) {
     const isDuplicateByLink = newsHistory.some(historyItem => historyItem.link === newsItem.link);
@@ -952,7 +983,7 @@ function addNewsToHistory(newsItem, currentState) {
 
 // --- 3. 핵심 기능 함수 (Core Feature Functions) ---
 
-// 🔥 자산별 개별 뉴스 검색 - 1분에 하나씩 순환 검색
+// 🔥 자산별 개별 뉴스 검색 - 1분에 하나씩 순환 검색 (개선된 버전)
 async function checkNewsWithRotatingAssets(currentState) {
     console.log(`\n📰 [뉴스] 자산별 순환 뉴스 검색 시작...`);
     
@@ -990,7 +1021,8 @@ async function checkNewsWithRotatingAssets(currentState) {
     const nextAsset = newsEnabledAssets[nextAssetIndex];
     console.log(`➡️ 다음 뉴스 검색 예정: ${nextAsset.name} (1분 후)`);
     
-    const searchUrl = `https://search.naver.com/search.naver?where=news&query=${encodeURIComponent(searchQuery)}&sort=1&field=0&pd=0&ds=&de=&docid=&related=0&mynews=0&office_type=0&office_section_code=0&news_office_checked=&nso=so%3Ar%2Cp%3Aall&is_sug_officeid=0&office_category=0&service_area=0`;
+    // 🎯 새로운 네이버 뉴스 검색 URL (ssc=tab.news.all 방식)
+    const searchUrl = `https://search.naver.com/search.naver?ssc=tab.news.all&where=news&sm=tab_jum&query=${encodeURIComponent(searchQuery)}`;
     
     console.log(`🌐 검색 URL: ${searchUrl}`);
     
@@ -1003,12 +1035,18 @@ async function checkNewsWithRotatingAssets(currentState) {
 
         console.log(`✅ ${targetAsset.name} HTML 데이터 가져오기 성공 (길이: ${html.length}자)`);
         
-        // 🔍 HTML 구조 분석을 위한 디버깅
-        console.log(`\n🔍 ${targetAsset.name} HTML 구조 분석 중...`);
         const $ = cheerio.load(html);
         
-        // 🎯 2025년 네이버 뉴스 정확한 선택자들 (실제 구조 기반)
+        // 🔍 새로운 네이버 뉴스 구조 분석
+        console.log(`\n🔍 ${targetAsset.name} HTML 구조 분석...`);
+        
+        // 🎯 2025년 새로운 네이버 뉴스 선택자들 (실제 HTML 기반)
         const newsSelectors = [
+            // 🔥 실제 HTML에서 확인된 선택자들 (우선순위 높음)
+            '.sds-comps-vertical-layout.NYqAjUWdQsgkJBAODPln',    // 각 뉴스 항목의 메인 컨테이너
+            '.sds-comps-vertical-layout.fds-news-item-list-tab',  // 뉴스 아이템 리스트 탭
+            'div[data-template-id="layout"]',                     // 레이아웃 템플릿
+            // 기존 선택자들 (호환성)
             '.JYgn_vFQHubpClbvwVL_',    // 메인 뉴스 컨테이너 (새로운 네이버 구조)
             '.fds-news-item-list-desk .JYgn_vFQHubpClbvwVL_', // 더 구체적인 경로
             '.news_area',               // 기존 선택자 (호환성)
@@ -1020,233 +1058,115 @@ async function checkNewsWithRotatingAssets(currentState) {
             '.news_wrap',               // 뉴스 랩퍼
             '.group_news > li'          // 그룹 뉴스 리스트
         ];
-        
-        console.log(`📊 ${targetAsset.name} 각 선택자별 요소 개수:`);
-        newsSelectors.forEach(selector => {
-            const count = $(selector).length;
-            console.log(`   ${selector}: ${count}개`);
-        });
-        
-        // 🎯 가장 많은 요소가 있는 선택자 찾기
-        let bestSelector = null;
-        let maxCount = 0;
-        
+
+        let newsItems = [];
+        let bestSelector = '';
+
+        // 선택자별로 시도하여 가장 좋은 결과 찾기
         for (const selector of newsSelectors) {
-            const count = $(selector).length;
-            if (count > maxCount) {
-                maxCount = count;
+            console.log(`🔍 ${targetAsset.name} 선택자 시도: ${selector}`);
+            const elements = $(selector);
+            console.log(`   → 찾은 요소: ${elements.length}개`);
+            
+            if (elements.length > 0) {
                 bestSelector = selector;
+                console.log(`✅ ${targetAsset.name} 최적 선택자 발견: ${selector} (${elements.length}개 요소)`);
+                
+                // 각 뉴스 항목에서 데이터 추출
+                elements.each((index, element) => {
+                    if (index < 10) { // 상위 10개만 처리
+                        console.log(`\n📄 ${targetAsset.name} [${index + 1}] 처리 중...`);
+                        
+                        const $el = $(element);
+                        
+                        // 다양한 방법으로 정보 추출 시도
+                        let title = '', link = '', summary = '', press = '', time = '';
+                        
+                        // 제목 추출 (여러 방법 시도)
+                        title = $el.find('.sds-comps-text-type-headline1').text().trim() ||
+                               $el.find('.news_tit').text().trim() ||
+                               $el.find('a[class*="news"]').first().text().trim() ||
+                               $el.find('h2, h3').text().trim() ||
+                               $el.find('.title').text().trim() ||
+                               '';
+                        
+                        // 링크 추출
+                        link = $el.find('.sds-comps-text-type-headline1').parent().attr('href') ||
+                              $el.find('a[href*="news"]').first().attr('href') ||
+                              $el.find('a').first().attr('href') ||
+                              '';
+                        
+                        // 링크가 상대경로인 경우 절대경로로 변환
+                        if (link && link.startsWith('/')) {
+                            link = 'https://search.naver.com' + link;
+                        }
+                        
+                        // 요약/설명 추출
+                        summary = $el.find('.sds-comps-text-type-body2').text().trim() ||
+                                 $el.find('.news_dsc').text().trim() ||
+                                 $el.find('.dsc_txt_wrap').text().trim() ||
+                                 '';
+                        
+                        // 언론사 추출
+                        press = $el.find('.sds-comps-text-type-body3').text().trim() ||
+                               $el.find('.press').text().trim() ||
+                               $el.find('.info_group .press').text().trim() ||
+                               '';
+                        
+                        // 시간 추출
+                        time = $el.find('.sds-comps-text-type-caption').text().trim() ||
+                              $el.find('.info_group .txt_inline').text().trim() ||
+                              '';
+                        
+                        console.log(`   📝 제목: ${title ? title.substring(0, 50) + '...' : '❌ 추출 실패'}`);
+                        console.log(`   🔗 링크: ${link ? link.substring(0, 50) + '...' : '❌ 추출 실패'}`);
+                        console.log(`   📰 언론사: ${press || '❌ 추출 실패'}`);
+                        console.log(`   ⏰ 시간: ${time || '❌ 추출 실패'}`);
+                        console.log(`   📄 설명: ${summary ? summary.substring(0, 100) + '...' : '❌ 추출 실패'}`);
+
+                        // 키워드 필터링: 제목에 검색 키워드가 포함되어야 함
+                        if (title && link) {
+                            const searchKeyword = targetAsset.name.toLowerCase();
+                            const titleLower = title.toLowerCase();
+                            
+                            if (titleLower.includes(searchKeyword)) {
+                                console.log(`✅ ${targetAsset.name} 키워드 포함 확인`);
+                                
+                                // 시간 필터링
+                                const isRecent = isNewsRecentByTime(time);
+                                console.log(`⏰ 시간 필터링 결과: ${isRecent ? 'PASS' : 'FAIL'}`);
+                                
+                                const newsItem = {
+                                    title: title,
+                                    link: link,
+                                    description: summary || '설명 없음',
+                                    press: press || '언론사 미상',
+                                    time: time || '시간 미상',
+                                    isRecent: isRecent,
+                                    searchedAsset: targetAsset.name
+                                };
+                                
+                                newsItems.push(newsItem);
+                                console.log(`✅ ${targetAsset.name} 뉴스 아이템 추가!`);
+                                
+                            } else {
+                                console.log(`🚫 ${targetAsset.name} 키워드 미포함으로 제외`);
+                            }
+                        } else {
+                            console.log(`❌ 필수 정보 부족으로 건너뜀`);
+                        }
+                    }
+                });
+                break; // 성공적으로 추출했으면 루프 종료
             }
         }
-        
-        console.log(`🎯 ${targetAsset.name} 최적 선택자: ${bestSelector} (${maxCount}개)`);
-        
-        const newsItems = [];
-        console.log(`\n=== ${targetAsset.name} 뉴스 아이템 추출 시작 ===`);
-        
-        // 🚀 다중 선택자 방식으로 뉴스 추출
-        if (bestSelector && maxCount > 0) {
-            console.log(`✅ ${targetAsset.name}: ${bestSelector} 선택자로 뉴스 추출 시도...`);
-            
-            $(bestSelector).each((index, element) => {
-                if (index >= 10) return false; // 개별 검색이므로 10개까지만 확인
-                
-                const $element = $(element);
-                
-                // 🎯 2025년 네이버 뉴스 정확한 제목 선택자들
-                const titleSelectors = [
-                    '.sds-comps-text-type-headline1',  // 🔥 실제 제목 선택자!
-                    '.a2OpSM_aSvFbHwpL_f8N span',     // 제목 링크 안의 span
-                    '.news_tit',                       // 기존 선택자 (호환성)
-                    '.sds-comps-text-ellipsis-1',     // 말줄임 텍스트
-                    'span[class*="headline"]',         // headline 포함 span
-                    'h1, h2, h3',                     // 헤딩 태그
-                    '.news_title',                     // 뉴스 타이틀
-                    '.title',                          // 제목
-                    '.subject',                        // 주제
-                    'a[href*="news"] span',           // 뉴스 링크 안의 span
-                    '.headline'                        // 헤드라인
-                ];
-                
-                let title = '', link = '';
-                
-                // 제목과 링크를 함께 찾기 (2025년 네이버 구조)
-                title = '';
-                link = '';
-                
-                // 🔥 방법 1: 제목 링크를 직접 찾기
-                const titleLinkEl = $element.find('a.a2OpSM_aSvFbHwpL_f8N').first();
-                if (titleLinkEl.length > 0) {
-                    title = titleLinkEl.find('span').text().trim();
-                    link = titleLinkEl.attr('href') || '';
-                    if (title && link) {
-                        console.log(`   ✅ 직접 링크로 제목 추출 성공: ${title.substring(0, 50)}...`);
-                    }
-                }
-                
-                // 🔥 방법 2: 제목 선택자들 시도
-                if (!title || !link) {
-                    for (const titleSel of titleSelectors) {
-                        const titleEl = $element.find(titleSel).first();
-                        if (titleEl.length > 0) {
-                            title = titleEl.text().trim();
-                            // 링크는 부모나 형제 요소에서 찾기
-                            let linkEl = titleEl.closest('a');
-                            if (!linkEl.length) {
-                                linkEl = titleEl.find('a');
-                            }
-                            if (!linkEl.length) {
-                                linkEl = titleEl.siblings('a');
-                            }
-                            link = linkEl.attr('href') || '';
-                            
-                            if (title && link) {
-                                console.log(`   ✅ 제목 추출 성공 (${titleSel}): ${title.substring(0, 50)}...`);
-                                break;
-                            }
-                        }
-                    }
-                }
-                
-                // 🔥 방법 3: 모든 링크에서 뉴스 링크 찾기
-                if (!title || !link) {
-                    $element.find('a[href]').each((i, linkElement) => {
-                        const href = $(linkElement).attr('href') || '';
-                        if (href.includes('news.naver.com') || href.includes('/news/') || 
-                            href.includes('newsis.com') || href.includes('mt.co.kr')) {
-                            const linkText = $(linkElement).text().trim();
-                            if (linkText.length > 10) { // 제목으로 보이는 긴 텍스트
-                                title = linkText;
-                                link = href;
-                                console.log(`   ✅ 뉴스 링크로 제목 추출 성공: ${title.substring(0, 50)}...`);
-                                return false; // break
-                            }
-                        }
-                    });
-                }
-                
-                // 🎯 2025년 네이버 뉴스 정확한 설명 선택자들
-                const descSelectors = [
-                    '.sds-comps-text-type-body1',      // 🔥 실제 설명 선택자!
-                    '.ZkgZF9QnPXPmWBGNB6jx span',     // 설명 링크 안의 span
-                    '.sds-comps-text-ellipsis-3',     // 3줄 말줄임 텍스트
-                    '.news_dsc',                       // 기존 선택자 (호환성)
-                    'span[class*="body1"]',           // body1 포함 span
-                    '.dsc',                            // 설명
-                    '.desc',                           // 설명  
-                    '.summary',                        // 요약
-                    '.content',                        // 내용
-                    '.api_txt_lines'                   // API 텍스트 라인
-                ];
-                
-                let summary = '';
-                for (const descSel of descSelectors) {
-                    const descEl = $element.find(descSel).first();
-                    if (descEl.length > 0) {
-                        summary = descEl.text().trim();
-                        if (summary) break;
-                    }
-                }
-                
-                // 🎯 2025년 네이버 뉴스 정확한 언론사 선택자들
-                const pressSelectors = [
-                    '.sds-comps-profile-info-title-text', // 🔥 실제 언론사 선택자!
-                    '.aGReZdhn88Mnt8epC99Z span',         // 언론사 링크 안의 span  
-                    'span:contains("뉴시스")',            // 특정 언론사명 포함
-                    'span:contains("머니투데이")',         // 특정 언론사명 포함
-                    '.press',                              // 기존 선택자 (호환성)
-                    '.source',                             // 소스
-                    '.cp',                                 // 언론사 (축약)
-                    '.origin',                             // 출처
-                    '.media',                              // 미디어
-                    '.publisher'                           // 퍼블리셔
-                ];
-                
-                let press = '';
-                for (const pressSel of pressSelectors) {
-                    const pressEl = $element.find(pressSel).first();
-                    if (pressEl.length > 0) {
-                        press = pressEl.text().trim();
-                        if (press) break;
-                    }
-                }
-                
-                // 🎯 2025년 네이버 뉴스 정확한 시간 선택자들
-                const timeSelectors = [
-                    '.FNqbuMwRQnfUfxlyHtTA span',         // 🔥 실제 시간 선택자!
-                    'span:contains("시간 전")',           // "시간 전" 포함 span
-                    'span:contains("일 전")',             // "일 전" 포함 span
-                    'span:contains("분 전")',             // "분 전" 포함 span
-                    '.sds-comps-text-type-body2:contains("전")', // "전" 포함 body2 텍스트
-                    '.info',                               // 기존 선택자 (호환성)
-                    '.date',                               // 날짜
-                    '.time',                               // 시간
-                    '.when',                               // 언제
-                    '.datetime',                           // 날짜시간
-                    '.ago'                                 // ~전
-                ];
-                
-                let time = '';
-                for (const timeSel of timeSelectors) {
-                    const timeEls = $element.find(timeSel);
-                    if (timeEls.length > 0) {
-                        timeEls.each((i, timeEl) => {
-                            const timeText = $(timeEl).text().trim();
-                            // 🔥 시간 표현만 필터링 (네이버뉴스, 기자명 등 제외)
-                            if (timeText.match(/\d+\s*(분|시간|일|주|개월|년)\s*전/) || 
-                                timeText.includes('분 전') || 
-                                timeText.includes('시간 전') || 
-                                timeText.includes('일 전')) {
-                                time = timeText;
-                                return false; // break
-                            }
-                        });
-                        if (time) break;
-                    }
-                }
-
-                console.log(`\n--- ${targetAsset.name} 뉴스 ${index + 1} (${bestSelector}) ---`);
-                console.log(`제목: ${title || '❌ 추출 실패'}`);
-                console.log(`링크: ${link || '❌ 추출 실패'}`);
-                console.log(`언론사: ${press || '❌ 추출 실패'}`);
-                console.log(`시간: ${time || '❌ 추출 실패'}`);
-                console.log(`설명: ${summary ? summary.substring(0, 100) + '...' : '❌ 추출 실패'}`);
-
-                // 🔥 키워드 필터링: 제목에 검색 키워드가 포함되어야 함
-                if (title && link) {
-                    const searchKeyword = targetAsset.name.toLowerCase();
-                    const titleLower = title.toLowerCase();
-                    
-                    if (titleLower.includes(searchKeyword)) {
-                        console.log(`✅ ${targetAsset.name} 키워드 포함 확인: "${searchKeyword}" in "${title.substring(0, 50)}..."`);
-                        
-                        newsItems.push({
-                            title: title,
-                            link: link,
-                            description: summary,
-                            press: press,
-                            time: time,
-                            searchedAsset: targetAsset.name,  // 🔥 어떤 자산으로 검색했는지 기록
-                            pubDate: new Date().toISOString()
-                        });
-                        console.log(`✅ ${targetAsset.name} 뉴스 아이템 추가 성공!`);
-                    } else {
-                        console.log(`🚫 ${targetAsset.name} 키워드 미포함으로 제외: "${searchKeyword}" not in "${title.substring(0, 50)}..."`);
-                    }
-                } else {
-                    console.log(`❌ 필수 정보 부족으로 건너뜀`);
-                }
-            });
-        } else {
-            console.log(`❌ ${targetAsset.name}: 적절한 뉴스 선택자를 찾지 못했습니다.`);
-        }
-
-        console.log(`\n=== ${targetAsset.name}: 총 ${newsItems.length}개의 뉴스 아이템 추출 완료 ===`);
 
         if (newsItems.length === 0) {
             console.log(`❌ ${targetAsset.name} 추출된 뉴스가 없습니다.`);
             return;
         }
+
+        console.log(`\n=== ${targetAsset.name}: 총 ${newsItems.length}개의 뉴스 아이템 추출 완료 ===`);
 
         // 각 뉴스 아이템에 대해 시간 기반 필터링 + 중복 체크
         let newNewsCount = 0;
@@ -1259,7 +1179,7 @@ async function checkNewsWithRotatingAssets(currentState) {
             console.log(`\n📄 ${targetAsset.name} 처리 중: ${newsItem.title.substring(0, 50)}...`);
             
             // 1단계: 시간 표현 기반 날짜 필터링
-            if (!isNewsRecentByTime(newsItem.time)) {
+            if (!newsItem.isRecent) {
                 filteredByDate++;
                 console.log(`🚫 시간 필터링으로 제외됨`);
                 continue;
@@ -1267,43 +1187,49 @@ async function checkNewsWithRotatingAssets(currentState) {
             
             // 2단계: 중복 체크
             const isDuplicate = isNewsAlreadySent(newsItem, currentState.newsHistory);
-            console.log(`✅ 중복 여부: ${isDuplicate ? '중복됨 (건너뜀)' : '새로운 뉴스'}`);
+            console.log(`✅ 중복 여부: ${isDuplicate ? '중복됨' : '새로움'}`);
             
             if (isDuplicate) {
                 filteredByDuplicate++;
-                console.log(`🚫 중복 필터링으로 제외됨`);
+                console.log(`🚫 중복 뉴스로 제외됨`);
                 continue;
             }
             
-            // 3단계: 새로운 뉴스 처리
+            // 새로운 뉴스 발견! 알림 발송
             console.log(`🎉 ${targetAsset.name} 새로운 뉴스 발견!`);
-            
-            // ✅ Flex Message로 뉴스 알림 전송
-            await sendNewsFlexMessage(newsItem);
+            newNewsCount++;
             
             // 뉴스 히스토리에 추가
-            addNewsToHistory(newsItem, currentState);
+            currentState.newsHistory.push({
+                title: newsItem.title,
+                link: newsItem.link,
+                press: newsItem.press,
+                time: newsItem.time,
+                asset: targetAsset.name,
+                sentAt: new Date().toISOString()
+            });
             
-            newNewsCount++;
-            console.log(`✅ ${targetAsset.name} 새 뉴스 Flex 알림 전송 및 히스토리 추가 완료`);
-            
-            // 개별 검색이므로 한 번에 최대 2개까지만 전송
-            if (newNewsCount >= 2) {
-                console.log(`⚠️ ${targetAsset.name}: 한 번에 최대 2개의 새 뉴스만 처리합니다.`);
-                break;
+            // 히스토리 크기 제한
+            if (currentState.newsHistory.length > MAX_NEWS_HISTORY) {
+                currentState.newsHistory = currentState.newsHistory.slice(-MAX_NEWS_HISTORY);
+                console.log(`📋 뉴스 히스토리 정리: 최대 ${MAX_NEWS_HISTORY}개 유지`);
             }
+            
+            // 🎯 Flex Message로 뉴스 발송
+            await sendNewsFlexMessage(newsItem);
         }
         
-        console.log(`\n=== ${targetAsset.name} 뉴스 처리 결과 ===`);
-        console.log(`📊 전체 뉴스: ${newsItems.length}개`);
-        console.log(`🚫 시간으로 필터링: ${filteredByDate}개`);
-        console.log(`🚫 중복으로 필터링: ${filteredByDuplicate}개`);
-        console.log(`🎉 새로 처리된 뉴스: ${newNewsCount}개`);
+        console.log(`\n=== ${targetAsset.name} 필터링 결과 ===`);
+        console.log(`📊 전체 수집: ${newsItems.length}개`);
+        console.log(`🚫 시간 필터링 제외: ${filteredByDate}개`);
+        console.log(`🚫 중복 필터링 제외: ${filteredByDuplicate}개`);
+        console.log(`🎉 새로운 뉴스: ${newNewsCount}개`);
 
     } catch (error) {
-        console.error(`❌ ${targetAsset.name} 뉴스 검색 처리 중 오류 발생:`, error.message);
+        console.error(`❌ ${targetAsset.name} 뉴스 검색 중 오류:`, error.message);
     }
 }
+
 
 // 🚀 완전 자동화된 자산 가격 체크 함수 (방법 2: 명시적 한국 시간 사용)
 async function checkAllEnabledAssets(currentState) {
