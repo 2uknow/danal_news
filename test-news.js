@@ -1,84 +1,71 @@
-// test-news.js - 뉴스 알림 테스트용 스크립트
 const util = require('util');
 const exec = util.promisify(require('child_process').exec);
 const cheerio = require('cheerio');
-const fetch = require('node-fetch');
 const https = require('https');
-const fs = require('fs');
+const fetch = require('node-fetch');
 
-// config.json에서 웹훅 URL 로드
-let config = {};
-try {
-    if (fs.existsSync('config.json')) {
-        config = JSON.parse(fs.readFileSync('config.json', 'utf-8'));
-    }
-} catch (error) {
-    console.error('❌ config.json 읽기 실패:', error.message);
-    console.log('💡 config.json 파일을 생성하거나 WEBHOOK_URL 환경변수를 설정하세요.');
-}
-
-// 웹훅 URL 설정 (우선순위: 환경변수 > config.json > 기본값)
-const WEBHOOK_URL = process.env.WEBHOOK_URL || 
-                   config.webhookUrl || 
-                   'https://naverworks.danal.co.kr/message/direct/service/channels/danal_test';
-
-// 테스트할 자산 목록
+// 테스트용 설정
 const TEST_ASSETS = [
-    { name: '페이코인', query: '페이코인', type: 'crypto' },
-    { name: '다날', query: '다날', type: 'stock' },
-    { name: '비트코인', query: '비트코인', type: 'crypto' }
+    { name: '다날', type: 'stock' },
+    { name: '페이코인', type: 'crypto' },
+    { name: '비트코인', type: 'crypto' }
 ];
+
+// 🔥 네이버웍스 훅 URL (실제 URL로 변경하세요)
+const NAVER_WORKS_HOOK_URL = 'https://naverworks.danal.co.kr/message/direct/service/channels/2uknow_test';
 
 const insecureAgent = new https.Agent({ rejectUnauthorized: false, keepAlive: false });
 
-// HTTP 요청 함수
-async function fetchWithCurl(url, options = { isJson: true }) { 
-    const headers = options.headers || {}; 
-    let headerString = ''; 
-    for (const key in headers) { 
-        headerString += `-H "${key}: ${headers[key]}" `; 
-    } 
-    const command = `curl -s -k -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" ${headerString} "${url}"`;
-    
+// 🎯 네이버웍스 메시지 전송 함수들
+async function sendNotification(message) { 
+    console.log('📤 네이버웍스로 일반 메시지 전송 시도...'); 
     try { 
-        const { stdout } = await exec(command, { timeout: 15000 }); 
-        return options.isJson ? JSON.parse(stdout) : stdout; 
+        await fetch(NAVER_WORKS_HOOK_URL, { 
+            method: 'POST', 
+            body: message, 
+            headers: { 'Content-Type': 'text/plain;charset=UTF-8' }, 
+            agent: insecureAgent 
+        }); 
+        console.log('✅ 일반 메시지 전송 성공!'); 
     } catch (error) { 
-        if (error instanceof SyntaxError) { 
-            console.error(`❌ 응답이 JSON 형식이 아닙니다. (URL: ${url})`); 
-        } else { 
-            console.error(`❌ curl 실행 오류 (URL: ${url}):`, error.message); 
-        } 
-        return null; 
+        console.error('❌ 네이버웍스 일반 메시지 전송 실패:', error.message); 
     } 
 }
 
-// 메시지 전송 함수
-async function sendTestMessage(message) {
-    console.log('📤 테스트 메시지 전송 시도...');
-    console.log('🔗 웹훅 URL:', WEBHOOK_URL);
-    
-    try {
-        const response = await fetch(WEBHOOK_URL, {
-            method: 'POST',
-            body: message,
+// 🎯 Flex Message 전송 함수
+async function sendFlexNotification(flexMessage) { 
+    console.log('📤 네이버웍스로 Flex Message 전송 시도...'); 
+    try { 
+        const messageBody = JSON.stringify(flexMessage, null, 2);
+        
+        await fetch(NAVER_WORKS_HOOK_URL, { 
+            method: 'POST', 
+            body: messageBody, 
             headers: { 
                 'Content-Type': 'application/json'
-            },
-            agent: insecureAgent
-        });
+            }, 
+            agent: insecureAgent 
+        }); 
+        console.log('✅ Flex Message 전송 성공!'); 
         
-        console.log('✅ 응답 상태:', response.status);
-        console.log('✅ 메시지 전송 성공!');
-        return true;
-    } catch (error) {
-        console.error('❌ 메시지 전송 실패:', error.message);
-        return false;
-    }
+        console.log('📋 전송된 Flex Message 미리보기:');
+        console.log(messageBody.substring(0, 300) + '...');
+        
+    } catch (error) { 
+        console.error('❌ 네이버웍스 Flex Message 전송 실패:', error.message); 
+        
+        // 폴백: 일반 텍스트로 전송
+        console.log('🔄 일반 텍스트로 폴백 전송 시도...');
+        const altText = flexMessage.content.altText;
+        await sendNotification(altText);
+        console.log('✅ 폴백 텍스트 메시지 전송 완료');
+    } 
 }
 
-// 뉴스 Flex Message 생성 함수
-function createNewsFlexMessage(newsItem) {
+// 🎯 뉴스 알림을 Flex Message로 전송하는 함수  
+async function sendNewsFlexMessage(newsItem) {
+    console.log('📤 뉴스 알림 Flex Message 생성 중...');
+    
     const now = new Date();
     const kstTime = now.toLocaleString('ko-KR', {
         timeZone: 'Asia/Seoul',
@@ -94,10 +81,10 @@ function createNewsFlexMessage(newsItem) {
     const title = newsItem.title.length > 80 ? newsItem.title.substring(0, 77) + '...' : newsItem.title;
     const description = newsItem.description.length > 150 ? newsItem.description.substring(0, 147) + '...' : newsItem.description;
     
-    return {
+    const flexMessage = {
         "content": {
             "type": "flex",
-            "altText": `📰 [테스트뉴스: ${newsItem.searchedAsset}] ${title}`,
+            "altText": `📰 [테스트 뉴스: ${newsItem.searchedAsset}] ${title}`,
             "contents": {
                 "type": "bubble",
                 "size": "mega",
@@ -107,7 +94,7 @@ function createNewsFlexMessage(newsItem) {
                     "contents": [
                         {
                             "type": "text",
-                            "text": "📰 뉴스 알림 테스트",
+                            "text": "📰 테스트 뉴스 알림",
                             "weight": "bold",
                             "size": "lg",
                             "color": "#FFFFFF"
@@ -155,7 +142,7 @@ function createNewsFlexMessage(newsItem) {
                         },
                         {
                             "type": "text",
-                            "text": `🧪 테스트 모드 | ⏰ ${kstTime}`,
+                            "text": `⏰ ${kstTime}`,
                             "size": "xs",
                             "color": "#888888",
                             "align": "end",
@@ -175,7 +162,7 @@ function createNewsFlexMessage(newsItem) {
                             "height": "sm",
                             "action": {
                                 "type": "uri",
-                                "label": "📖 전체 기사 보기",
+                                "label": "📰 뉴스 전문 보기",
                                 "uri": newsItem.link
                             }
                         }
@@ -184,47 +171,130 @@ function createNewsFlexMessage(newsItem) {
             }
         }
     };
+    
+    await sendFlexNotification(flexMessage);
 }
 
-// 뉴스 검색 및 파싱 함수
-async function searchAndParseNews(asset) {
-    console.log(`\n🔍 ${asset.name} 뉴스 검색 테스트 시작...`);
+async function fetchWithCurl(url, options = { isJson: true }) { 
+    const headers = options.headers || {}; 
+    let headerString = ''; 
+    for (const key in headers) { 
+        headerString += `-H "${key}: ${headers[key]}" `; 
+    } 
+    const command = `curl -s -k -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" ${headerString} "${url}"`;
     
-    const searchUrl = `https://search.naver.com/search.naver?where=news&query=${encodeURIComponent(asset.name)}&sort=1&field=0&pd=0&ds=&de=&docid=&related=0&mynews=0&office_type=0&office_section_code=0&news_office_checked=&nso=so%3Ar%2Cp%3Aall&is_sug_officeid=0&office_category=0&service_area=0`;
+    try { 
+        const { stdout } = await exec(command, { timeout: 15000 }); 
+        return options.isJson ? JSON.parse(stdout) : stdout; 
+    } catch (error) { 
+        if (error instanceof SyntaxError) { 
+            console.error(`❌ 응답이 JSON 형식이 아닙니다. (URL: ${url})`); 
+        } else { 
+            console.error(`❌ curl 실행 오류 (URL: ${url}):`, error.message); 
+        } 
+        return null; 
+    } 
+}
+
+// 실제 뉴스 날짜 검증 (시간 표현 기반)
+function isNewsRecentByTime(timeText, maxAgeHours = 6) {
+    try {
+        console.log(`⏰ 시간 텍스트 분석: "${timeText}"`);
+        
+        // 명확하게 오래된 표현들 체크
+        const oldKeywords = ['일 전', '일전', '주 전', '주전', '개월 전', '달 전', '년 전', '년전'];
+        const isOld = oldKeywords.some(keyword => timeText.includes(keyword));
+        
+        if (isOld) {
+            console.log(`❌ 오래된 뉴스 키워드 발견: ${timeText}`);
+            return false;
+        }
+        
+        // 시간 표현이 있는 경우 파싱해서 체크
+        if (timeText.includes('시간 전') || timeText.includes('시간전')) {
+            const hours = parseInt(timeText.match(/(\d+)시간/)?.[1] || '0');
+            console.log(`⏰ ${hours}시간 전 뉴스 (기준: ${maxAgeHours}시간)`);
+            if (hours > maxAgeHours) {
+                console.log(`❌ 너무 오래된 뉴스: ${hours}시간 전`);
+                return false;
+            }
+        }
+        
+        // 분 단위, 오늘, 어제는 최신으로 간주
+        const recentKeywords = ['분 전', '분전', '오늘', 'today', '어제', 'yesterday'];
+        const isRecent = recentKeywords.some(keyword => timeText.includes(keyword));
+        
+        if (isRecent) {
+            console.log(`✅ 최신 뉴스 확인: ${timeText}`);
+            return true;
+        }
+        
+        // 확실하지 않은 경우 보수적으로 false
+        console.log(`❓ 불확실한 시간 표현, 안전하게 제외: ${timeText}`);
+        return false;
+        
+    } catch (error) {
+        console.error(`❌ 시간 파싱 오류: ${error.message}`);
+        return false;
+    }
+}
+
+// 🔥 개선된 네이버 뉴스 검색 + 발송 테스트 함수
+async function testNaverNewsSearchWithSend(assetName, sendMessages = false) {
+    console.log(`\n🔍 [${assetName}] 뉴스 검색 + 발송 테스트 시작...`);
+    console.log(`📤 메시지 발송: ${sendMessages ? '활성화' : '비활성화'}`);
+    
+    // 🎯 새로운 네이버 뉴스 검색 URL (ssc=tab.news.all 방식)
+    const searchUrl = `https://search.naver.com/search.naver?ssc=tab.news.all&where=news&sm=tab_jum&query=${encodeURIComponent(assetName)}`;
     
     console.log(`🌐 검색 URL: ${searchUrl}`);
     
     try {
         const html = await fetchWithCurl(searchUrl, { isJson: false });
         if (!html) {
-            console.log(`❌ ${asset.name} HTML 데이터를 가져오지 못했습니다.`);
-            return [];
+            console.log(`❌ ${assetName} 뉴스 페이지를 가져오지 못했습니다.`);
+            return;
         }
 
-        console.log(`✅ ${asset.name} HTML 데이터 가져오기 성공 (길이: ${html.length}자)`);
+        console.log(`✅ ${assetName} HTML 데이터 가져오기 성공 (길이: ${html.length}자)`);
         
         const $ = cheerio.load(html);
         
-        // 다양한 선택자로 뉴스 추출 시도
+        // 🔍 새로운 네이버 뉴스 구조 분석
+        console.log(`\n🔍 ${assetName} HTML 구조 분석...`);
+        
+        // 🎯 2025년 새로운 네이버 뉴스 선택자들 (실제 HTML 기반)
         const newsSelectors = [
-            '.JYgn_vFQHubpClbvwVL_',
-            '.news_area',
-            '.api_subject_bx',
+            // 🔥 실제 HTML에서 확인된 선택자들 (우선순위 높음)
+            '.sds-comps-vertical-layout.NYqAjUWdQsgkJBAODPln',    // 각 뉴스 항목의 메인 컨테이너
+            '.sds-comps-vertical-layout.fds-news-item-list-tab',  // 뉴스 아이템 리스트 탭
+            'div[data-template-id="layout"]',                     // 레이아웃 템플릿
+            // 기존 선택자들 (호환성)
+            '.news_wrap',                    // 뉴스 래퍼
+            '.bx',                          // 뉴스 박스
+            '.news_area',                   // 뉴스 영역
+            '.group_news > li',             // 뉴스 리스트 아이템
+            '.lst_news > li',               // 뉴스 목록
+            '.news_tit',                    // 뉴스 제목 (직접)
+            'div[class*="news"]',           // news 포함 div
+            '.type01 > li',                 // type01 리스트
+            '.list_news > li',              // 뉴스 리스트
+            // 기존 선택자들 (호환성)
+            '.JYgn_vFQHubpClbvwVL_',        
+            '.fds-news-item-list-desk .JYgn_vFQHubpClbvwVL_',
+            '.api_subject_bx',              
             'div[class*="JYgn_vFQHubpClbvwVL"]',
-            'div[class*="news"]',
-            'article',
-            '.news_wrap'
+            '.sds-comps-vertical-layout:has(.sds-comps-text-type-headline1)',
+            'article'                       
         ];
         
-        console.log(`📊 각 선택자별 요소 개수:`);
+        console.log(`📊 ${assetName} 각 선택자별 요소 개수:`);
         newsSelectors.forEach(selector => {
             const count = $(selector).length;
             console.log(`   ${selector}: ${count}개`);
         });
         
-        const newsItems = [];
-        
-        // 가장 많은 요소가 있는 선택자 찾기
+        // 🎯 가장 많은 요소가 있는 선택자 찾기
         let bestSelector = null;
         let maxCount = 0;
         
@@ -236,76 +306,90 @@ async function searchAndParseNews(asset) {
             }
         }
         
-        console.log(`🎯 최적 선택자: ${bestSelector} (${maxCount}개)`);
+        console.log(`🎯 ${assetName} 최적 선택자: ${bestSelector} (${maxCount}개)`);
+        
+        const newsItems = [];
+        console.log(`\n=== ${assetName} 뉴스 아이템 추출 시작 (최대 3개) ===`);
         
         if (bestSelector && maxCount > 0) {
-            $(bestSelector).each((index, element) => {
-                if (index >= 5) return false; // 테스트이므로 5개만
-                
+            console.log(`✅ ${assetName}: ${bestSelector} 선택자로 뉴스 추출 시도...`);
+            
+            const elements = $(bestSelector);
+            for (let index = 0; index < Math.min(elements.length, 3); index++) {
+                const element = elements[index];
                 const $element = $(element);
                 
-                // 제목 추출
+                // 🎯 뉴스 제목 추출 (다양한 선택자 시도) - 실제 HTML 기반
                 const titleSelectors = [
-                    '.sds-comps-text-type-headline1',
-                    '.a2OpSM_aSvFbHwpL_f8N span',
-                    '.news_tit',
-                    '.sds-comps-text-ellipsis-1',
-                    'span[class*="headline"]',
-                    'h1, h2, h3',
-                    '.title'
+                    // 🔥 실제 HTML에서 확인된 제목 선택자들
+                    '.sds-comps-text-type-headline1',                  // 🔥 실제 제목 선택자!
+                    'a[href*="news"] .sds-comps-text-type-headline1',  // 링크 안의 headline1
+                    '.UpDjg8Q2DzdaIi4sfrjX .sds-comps-text-type-headline1', // 특정 클래스 안의 제목
+                    // 기존 선택자들 (호환성)
+                    '.news_tit',                       // 뉴스 제목 클래스
+                    'a.news_tit',                      // 링크 형태의 뉴스 제목
+                    '.tit',                            // 제목 축약
+                    '.title',                          // 제목
+                    'dt a',                            // dt 태그 안의 링크
+                    'h2 a',                            // h2 안의 링크
+                    'h3 a',                            // h3 안의 링크
+                    '.a2OpSM_aSvFbHwpL_f8N span',     // 기존 선택자
+                    'span[class*="headline"]',         // headline 포함 span
+                    'a[href*="news"] span',           // 뉴스 링크 안의 span
+                    '.headline',                       // 헤드라인
+                    '.subject'                         // 주제
                 ];
                 
                 let title = '', link = '';
                 
-                // 제목과 링크 찾기
-                const titleLinkEl = $element.find('a.a2OpSM_aSvFbHwpL_f8N').first();
-                if (titleLinkEl.length > 0) {
-                    title = titleLinkEl.find('span').text().trim();
-                    link = titleLinkEl.attr('href') || '';
-                }
-                
-                if (!title || !link) {
-                    for (const titleSel of titleSelectors) {
-                        const titleEl = $element.find(titleSel).first();
-                        if (titleEl.length > 0) {
+                // 제목과 링크 추출
+                for (const titleSel of titleSelectors) {
+                    const titleEl = $element.find(titleSel).first();
+                    if (titleEl.length > 0) {
+                        if (titleEl.is('a')) {
+                            // 링크 요소인 경우
                             title = titleEl.text().trim();
+                            link = titleEl.attr('href') || '';
+                        } else {
+                            // 일반 요소인 경우
+                            title = titleEl.text().trim();
+                            // 부모나 형제에서 링크 찾기
                             let linkEl = titleEl.closest('a');
                             if (!linkEl.length) {
-                                linkEl = titleEl.find('a');
+                                linkEl = titleEl.parent('a');
                             }
                             if (!linkEl.length) {
                                 linkEl = titleEl.siblings('a');
                             }
+                            if (!linkEl.length) {
+                                linkEl = $element.find('a[href*="news"]').first();
+                            }
                             link = linkEl.attr('href') || '';
-                            
-                            if (title && link) break;
+                        }
+                        
+                        if (title && link) {
+                            console.log(`   ✅ 제목 추출 성공 (${titleSel}): ${title.substring(0, 50)}...`);
+                            break;
                         }
                     }
                 }
                 
-                // 모든 링크에서 뉴스 링크 찾기
-                if (!title || !link) {
-                    $element.find('a[href]').each((i, linkElement) => {
-                        const href = $(linkElement).attr('href') || '';
-                        if (href.includes('news.naver.com') || href.includes('/news/')) {
-                            const linkText = $(linkElement).text().trim();
-                            if (linkText.length > 10) {
-                                title = linkText;
-                                link = href;
-                                return false;
-                            }
-                        }
-                    });
-                }
-                
-                // 설명 추출
+                // 🎯 설명 추출 - 실제 HTML 기반
                 const descSelectors = [
-                    '.sds-comps-text-type-body1',
-                    '.ZkgZF9QnPXPmWBGNB6jx span',
-                    '.sds-comps-text-ellipsis-3',
-                    '.news_dsc',
-                    '.dsc',
-                    '.summary'
+                    // 🔥 실제 HTML에서 확인된 설명 선택자들
+                    '.sds-comps-text-type-body1',                      // 🔥 실제 설명 선택자!
+                    '.qayQSl_GP1qS0BX8dYlm .sds-comps-text-type-body1', // 특정 클래스 안의 body1
+                    'a[href*="news"] .sds-comps-text-type-body1',      // 링크 안의 body1
+                    // 기존 선택자들 (호환성)
+                    '.dsc',                            // 설명
+                    '.desc',                           // 설명
+                    '.api_txt_lines',                  // API 텍스트
+                    '.summary',                        // 요약
+                    '.news_dsc',                       // 뉴스 설명
+                    '.ZkgZF9QnPXPmWBGNB6jx span',     // 기존 선택자
+                    '.sds-comps-text-ellipsis-3',     // 3줄 말줄임 텍스트
+                    'span[class*="body1"]',           // body1 포함 span
+                    '.content'                         // 내용
                 ];
                 
                 let summary = '';
@@ -317,13 +401,28 @@ async function searchAndParseNews(asset) {
                     }
                 }
                 
-                // 언론사 추출
+                // 🎯 언론사 추출 - 실제 HTML 기반
                 const pressSelectors = [
-                    '.sds-comps-profile-info-title-text',
-                    '.aGReZdhn88Mnt8epC99Z span',
-                    '.press',
-                    '.source',
-                    '.cp'
+                    // 🔥 실제 HTML에서 확인된 언론사 선택자들
+                    '.sds-comps-profile-info-title-text span',         // 🔥 실제 언론사 선택자!
+                    '.sds-comps-profile-info-title-text',              // 언론사 제목 텍스트
+                    '.WjE3IRoBgEzuYnGSHgdj .sds-comps-profile-info-title-text', // 프로필 안의 언론사
+                    '.WjE3IRoBgEzuYnGSHgdj .sds-comps-profile-info-title-text span', // 더 구체적인 경로
+                    // 기존 선택자들 (호환성)
+                    '.press',                          // 언론사
+                    '.cp',                             // 언론사 축약
+                    '.source',                         // 소스
+                    '.origin',                         // 출처
+                    '.info_group .info:first-child',   // 정보 그룹의 첫 번째
+                    '.aGReZdhn88Mnt8epC99Z span',      // 기존 선택자
+                    'span:contains("뉴시스")',         // 특정 언론사명
+                    'span:contains("머니투데이")',      // 특정 언론사명
+                    'span:contains("뉴스1")',          // 특정 언론사명
+                    'span:contains("아시아경제")',      // 특정 언론사명
+                    'span:contains("이코노미스트")',    // 특정 언론사명
+                    'span:contains("잡포스트")',       // 특정 언론사명
+                    '.media',                          // 미디어
+                    '.publisher'                       // 퍼블리셔
                 ];
                 
                 let press = '';
@@ -335,13 +434,27 @@ async function searchAndParseNews(asset) {
                     }
                 }
                 
-                // 시간 추출
+                // 🎯 시간 추출 - 실제 HTML 기반
                 const timeSelectors = [
-                    '.FNqbuMwRQnfUfxlyHtTA span',
-                    'span:contains("시간 전")',
-                    'span:contains("분 전")',
-                    '.info',
-                    '.date'
+                    // 🔥 실제 HTML에서 확인된 시간 선택자들
+                    '.RhtLWxQlRdnXvHdGqikm span',                      // 🔥 실제 시간 선택자!
+                    '.sds-comps-profile-info-subtext span',            // 프로필 서브텍스트의 span
+                    '.sds-comps-profile-info-subtext .RhtLWxQlRdnXvHdGqikm span', // 더 구체적인 경로
+                    '.sds-comps-profile-info-subtext .sds-comps-text', // 프로필 서브텍스트
+                    // 기존 선택자들 (호환성)
+                    '.info_group .info:last-child',    // 정보 그룹의 마지막 (시간)
+                    '.date',                           // 날짜
+                    '.time',                           // 시간
+                    'span:contains("시간 전")',        // "시간 전" 포함
+                    'span:contains("분 전")',          // "분 전" 포함
+                    'span:contains("일 전")',          // "일 전" 포함
+                    'span:contains("주 전")',          // "주 전" 포함
+                    '.FNqbuMwRQnfUfxlyHtTA span',      // 기존 선택자
+                    '.sds-comps-text-type-body2:contains("전")', // "전" 포함 body2
+                    '.info',                           // 정보
+                    '.when',                           // 언제
+                    '.datetime',                       // 날짜시간
+                    '.ago'                             // ~전
                 ];
                 
                 let time = '';
@@ -350,122 +463,265 @@ async function searchAndParseNews(asset) {
                     if (timeEls.length > 0) {
                         timeEls.each((i, timeEl) => {
                             const timeText = $(timeEl).text().trim();
-                            if (timeText.match(/\d+\s*(분|시간|일)\s*전/) || 
+                            // 시간 표현만 필터링
+                            if (timeText.match(/\d+\s*(분|시간|일|주|개월|년)\s*전/) || 
                                 timeText.includes('분 전') || 
-                                timeText.includes('시간 전')) {
+                                timeText.includes('시간 전') || 
+                                timeText.includes('일 전') ||
+                                timeText.includes('오늘') ||
+                                timeText.includes('어제')) {
                                 time = timeText;
-                                return false;
+                                return false; // break
                             }
                         });
                         if (time) break;
                     }
                 }
-                
-                console.log(`\n--- 뉴스 ${index + 1} ---`);
+
+                console.log(`\n--- ${assetName} 뉴스 ${index + 1} (${bestSelector}) ---`);
                 console.log(`제목: ${title || '❌ 추출 실패'}`);
                 console.log(`링크: ${link || '❌ 추출 실패'}`);
                 console.log(`언론사: ${press || '❌ 추출 실패'}`);
                 console.log(`시간: ${time || '❌ 추출 실패'}`);
                 console.log(`설명: ${summary ? summary.substring(0, 100) + '...' : '❌ 추출 실패'}`);
-                
+
+                // 키워드 필터링: 제목에 검색 키워드가 포함되어야 함
                 if (title && link) {
-                    const searchKeyword = asset.name.toLowerCase();
+                    const searchKeyword = assetName.toLowerCase();
                     const titleLower = title.toLowerCase();
                     
-                    // 🔥 테스트용: 키워드 필터링 제거하고 모든 뉴스 추가
-                    newsItems.push({
-                        title: title,
-                        link: link,
-                        description: summary || '설명 없음',
-                        press: press || '언론사 미상',
-                        time: time || '시간 미상',
-                        searchedAsset: asset.name,
-                        pubDate: new Date().toISOString()
-                    });
-                    
                     if (titleLower.includes(searchKeyword)) {
-                        console.log(`✅ 키워드 포함 확인 - 테스트 뉴스 아이템 추가!`);
+                        console.log(`✅ ${assetName} 키워드 포함 확인`);
+                        
+                        // 시간 필터링
+                        const isRecent = isNewsRecentByTime(time);
+                        console.log(`⏰ 시간 필터링 결과: ${isRecent ? 'PASS' : 'FAIL'}`);
+                        
+                        const newsItem = {
+                            title: title,
+                            link: link,
+                            description: summary || '설명 없음',
+                            press: press || '언론사 미상',
+                            time: time || '시간 미상',
+                            isRecent: isRecent,
+                            searchedAsset: assetName
+                        };
+                        
+                        newsItems.push(newsItem);
+                        console.log(`✅ ${assetName} 뉴스 아이템 추가!`);
+                        
+                        // 🚀 메시지 발송 (첫 번째 뉴스만, sendMessages가 true일 때)
+                        if (sendMessages && newsItems.length === 1) {
+                            console.log(`\n📤 첫 번째 뉴스 Flex Message 발송 시도...`);
+                            await sendNewsFlexMessage(newsItem);
+                            console.log(`✅ 뉴스 발송 완료!`);
+                        }
+                        
                     } else {
-                        console.log(`⚠️ 키워드 미포함이지만 테스트용으로 추가 - "${searchKeyword}" not in "${title.substring(0, 50)}..."`);
+                        console.log(`🚫 ${assetName} 키워드 미포함으로 제외`);
                     }
+                } else {
+                    console.log(`❌ 필수 정보 부족으로 건너뜀`);
                 }
+            }
+        } else {
+            console.log(`❌ ${assetName}: 적절한 뉴스 선택자를 찾지 못했습니다.`);
+        }
+
+        console.log(`\n=== ${assetName} 테스트 결과 ===`);
+        console.log(`📊 전체 추출된 뉴스: ${newsItems.length}개`);
+        const recentNews = newsItems.filter(item => item.isRecent);
+        console.log(`⏰ 최신 뉴스 (6시간 이내): ${recentNews.length}개`);
+        
+        if (recentNews.length > 0) {
+            console.log(`\n🎉 ${assetName} 최신 뉴스 목록:`);
+            recentNews.forEach((item, index) => {
+                console.log(`${index + 1}. [${item.press}] ${item.title.substring(0, 50)}... (${item.time})`);
             });
         }
-        
-        console.log(`\n=== ${asset.name}: 총 ${newsItems.length}개의 뉴스 아이템 추출 ===`);
-        return newsItems;
-        
+
+        // 🎯 테스트 요약 메시지 (선택사항)
+        if (sendMessages && newsItems.length > 0) {
+            const summaryMessage = `📊 [테스트 완료] ${assetName} 뉴스 검색 결과\n` +
+                                 `• 전체 뉴스: ${newsItems.length}개\n` +
+                                 `• 최신 뉴스: ${recentNews.length}개\n` +
+                                 `• 최적 선택자: ${bestSelector}\n` +
+                                 `• 검색 URL: ssc=tab.news.all 방식 ✅`;
+            
+            console.log(`\n📤 테스트 요약 메시지 발송...`);
+            await sendNotification(summaryMessage);
+            console.log(`✅ 요약 메시지 발송 완료!`);
+        }
+
     } catch (error) {
-        console.error(`❌ ${asset.name} 뉴스 검색 중 오류:`, error.message);
-        return [];
+        console.error(`❌ ${assetName} 뉴스 검색 테스트 중 오류:`, error.message);
+        
+        if (sendMessages) {
+            const errorMessage = `❌ [테스트 오류] ${assetName} 뉴스 검색 실패\n오류: ${error.message}`;
+            await sendNotification(errorMessage);
+        }
     }
 }
 
-// 메인 테스트 함수
-async function runNewsTest() {
-    console.log('🧪 뉴스 알림 테스트 시작!');
-    console.log('🔗 웹훅 URL:', WEBHOOK_URL);
-    console.log('📊 테스트 자산:', TEST_ASSETS.map(a => a.name).join(', '));
+// HTML 구조 분석 함수
+async function analyzeHTMLStructure(assetName) {
+    console.log(`\n🔬 [${assetName}] HTML 구조 상세 분석...`);
     
-    // 환경 설정 확인
-    if (!WEBHOOK_URL.includes('http')) {
-        console.error('❌ 웹훅 URL이 올바르지 않습니다. config.json 파일이나 환경변수를 확인하세요.');
-        return;
+    const searchUrl = `https://search.naver.com/search.naver?ssc=tab.news.all&where=news&sm=tab_jum&query=${encodeURIComponent(assetName)}`;
+    
+    try {
+        const html = await fetchWithCurl(searchUrl, { isJson: false });
+        if (!html) {
+            console.log(`❌ HTML을 가져오지 못했습니다.`);
+            return;
+        }
+
+        const $ = cheerio.load(html);
+        
+        console.log(`📄 HTML 길이: ${html.length}자`);
+        console.log(`📄 전체 요소 개수: ${$('*').length}개`);
+        
+        // class나 id에 'news'가 포함된 모든 요소 찾기
+        console.log(`\n🔍 'news' 포함 클래스/ID 요소들:`);
+        $('[class*="news"], [id*="news"]').each((index, element) => {
+            if (index < 10) { // 처음 10개만
+                const tagName = $(element).prop('tagName').toLowerCase();
+                const className = $(element).attr('class') || '';
+                const id = $(element).attr('id') || '';
+                const text = $(element).text().trim().substring(0, 50);
+                console.log(`   ${tagName}.${className}#${id}: "${text}..."`);
+            }
+        });
+        
+        // ul, li 요소들 분석
+        console.log(`\n📋 리스트 구조 분석:`);
+        $('ul').each((index, element) => {
+            if (index < 5) { // 처음 5개만
+                const className = $(element).attr('class') || '';
+                const liCount = $(element).find('li').length;
+                console.log(`   ul.${className}: ${liCount}개의 li 요소`);
+                
+                if (liCount > 0) {
+                    $(element).find('li').each((liIndex, liElement) => {
+                        if (liIndex < 3) { // 각 ul당 처음 3개 li만
+                            const liClass = $(liElement).attr('class') || '';
+                            const linkCount = $(liElement).find('a').length;
+                            console.log(`     li.${liClass}: ${linkCount}개의 링크`);
+                        }
+                    });
+                }
+            }
+        });
+        
+        // 링크 분석 (href에 news가 포함된 것들)
+        console.log(`\n🔗 뉴스 링크 분석:`);
+        $('a[href*="news"]').each((index, element) => {
+            if (index < 5) { // 처음 5개만
+                const href = $(element).attr('href');
+                const text = $(element).text().trim().substring(0, 30);
+                const className = $(element).attr('class') || '';
+                console.log(`   a.${className}: "${text}..." → ${href.substring(0, 50)}...`);
+            }
+        });
+
+    } catch (error) {
+        console.error(`❌ HTML 구조 분석 중 오류:`, error.message);
+    }
+}
+
+// 🚀 발송 테스트 메인 함수
+async function runTestsWithSend(sendMessages = false) {
+    console.log('🚀 네이버 뉴스 검색 + 발송 테스트 시작');
+    console.log(`📤 메시지 발송 모드: ${sendMessages ? '활성화 🟢' : '비활성화 🔴'}`);
+    console.log('='.repeat(70));
+    
+    if (sendMessages) {
+        console.log('⚠️ 실제 네이버웍스로 메시지가 발송됩니다!');
+        console.log('🕒 3초 후 시작...');
+        await new Promise(resolve => setTimeout(resolve, 3000));
     }
     
-    let totalNewsFound = 0;
-    let totalSent = 0;
-    
-    for (const asset of TEST_ASSETS) {
-        const newsItems = await searchAndParseNews(asset);
-        totalNewsFound += newsItems.length;
+    for (let i = 0; i < TEST_ASSETS.length; i++) {
+        const asset = TEST_ASSETS[i];
         
-        if (newsItems.length > 0) {
-            console.log(`\n📤 ${asset.name}: ${newsItems.length}개 뉴스 중 첫 번째 항목을 테스트 전송합니다...`);
-            
-            const testNews = newsItems[0];
-            const flexMessage = createNewsFlexMessage(testNews);
-            const messageBody = JSON.stringify(flexMessage, null, 2);
-            
-            console.log('📋 전송할 메시지 미리보기:');
-            console.log(`제목: ${testNews.title}`);
-            console.log(`링크: ${testNews.link}`);
-            console.log(`언론사: ${testNews.press}`);
-            
-            const success = await sendTestMessage(messageBody);
-            if (success) {
-                totalSent++;
-                console.log(`✅ ${asset.name} 테스트 전송 성공!`);
-            } else {
-                console.log(`❌ ${asset.name} 테스트 전송 실패!`);
-            }
-            
-            // 연속 전송 방지를 위해 잠시 대기
-            await new Promise(resolve => setTimeout(resolve, 2000));
-        } else {
-            console.log(`\n⚠️ ${asset.name}: 추출된 뉴스가 없습니다.`);
+        console.log(`\n🎯 [${i + 1}/${TEST_ASSETS.length}] ${asset.name} 테스트 중...`);
+        
+        // 뉴스 검색 + 발송 테스트
+        await testNaverNewsSearchWithSend(asset.name, sendMessages);
+        
+        // HTML 구조 분석 (첫 번째 자산만)
+        if (i === 0) {
+            await analyzeHTMLStructure(asset.name);
+        }
+        
+        console.log('\n' + '-'.repeat(70));
+        
+        // 다음 테스트까지 대기 (API 호출 간격 조절)
+        if (i < TEST_ASSETS.length - 1) {
+            console.log('⏳ 다음 테스트까지 3초 대기...');
+            await new Promise(resolve => setTimeout(resolve, 3000));
         }
     }
     
-    console.log(`\n📊 테스트 결과 요약:`);
-    console.log(`- 검색한 자산: ${TEST_ASSETS.length}개`);
-    console.log(`- 발견한 뉴스: ${totalNewsFound}개`);
-    console.log(`- 전송 성공: ${totalSent}개`);
-    console.log(`- 전송 실패: ${TEST_ASSETS.length - totalSent}개`);
+    console.log('\n🎉 모든 테스트 완료!');
     
-    if (totalSent > 0) {
-        console.log(`\n✅ 테스트 완료! 뉴스 알림이 정상적으로 작동하고 있습니다.`);
-    } else {
-        console.log(`\n❌ 테스트 실패! 뉴스 알림에 문제가 있을 수 있습니다.`);
-        console.log(`💡 문제 해결 방법:`);
-        console.log(`1. 웹훅 URL 확인`);
-        console.log(`2. 네트워크 연결 확인`);
-        console.log(`3. 네이버 뉴스 사이트 구조 변경 여부 확인`);
+    if (sendMessages) {
+        const finalMessage = `🎉 [테스트 완료] 네이버 뉴스 검색 + 발송 테스트 완료\n` +
+                           `• 테스트 자산: ${TEST_ASSETS.map(a => a.name).join(', ')}\n` +
+                           `• 새 URL 방식: ssc=tab.news.all ✅\n` +
+                           `• Flex Message 지원 ✅\n` +
+                           `• 시간: ${new Date().toLocaleString('ko-KR', {timeZone: 'Asia/Seoul'})}`;
+        
+        console.log(`\n📤 최종 완료 메시지 발송...`);
+        await sendNotification(finalMessage);
+        console.log(`✅ 최종 메시지 발송 완료!`);
     }
+}
+
+// 메인 테스트 실행 (기존 - 발송 없음)
+async function runTests() {
+    console.log('🚀 네이버 뉴스 검색 테스트 시작 (발송 없음)');
+    console.log('='.repeat(70));
+    
+    for (const asset of TEST_ASSETS) {
+        // 1. 뉴스 검색 테스트 (발송 없음)
+        await testNaverNewsSearchWithSend(asset.name, false);
+        
+        // 2. HTML 구조 분석 (첫 번째 자산만)
+        if (asset === TEST_ASSETS[0]) {
+            await analyzeHTMLStructure(asset.name);
+        }
+        
+        console.log('\n' + '-'.repeat(70));
+        
+        // 잠시 대기 (API 호출 간격 조절)
+        await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+    
+    console.log('\n🎉 모든 테스트 완료!');
 }
 
 // 스크립트 실행
-console.log('🚀 뉴스 알림 테스트 스크립트 시작...');
-runNewsTest().catch(error => {
-    console.error('❌ 테스트 실행 중 오류:', error);
-});
+if (require.main === module) {
+    // 명령행 인수 확인
+    const args = process.argv.slice(2);
+    const sendMode = args.includes('--send') || args.includes('-s');
+    
+    if (sendMode) {
+        console.log('🚀 발송 모드로 테스트를 시작합니다!');
+        runTestsWithSend(true).catch(console.error);
+    } else {
+        console.log('🚀 일반 모드로 테스트를 시작합니다 (발송 없음)');
+        console.log('💡 발송 테스트를 원하면: node test-news.js --send');
+        runTests().catch(console.error);
+    }
+}
+
+module.exports = { 
+    testNaverNewsSearchWithSend, 
+    analyzeHTMLStructure, 
+    sendNewsFlexMessage,
+    sendNotification,
+    runTests,
+    runTestsWithSend 
+};
