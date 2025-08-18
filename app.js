@@ -107,6 +107,52 @@ function getNewsEnabledAssets() {
     return newsEnabledAssets;
 }
 
+
+// 주말/공휴일 체크 함수 (한국 시간 기준)
+function isKoreanBusinessDay() {
+    const now = new Date();
+    const kstNow = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Seoul"}));
+    const dayOfWeek = kstNow.getDay(); // 0=일요일, 6=토요일
+    
+    // 주말 체크 (토요일, 일요일)
+    if (dayOfWeek === 0 || dayOfWeek === 6) {
+        console.log(`-> 📅 주말입니다 (${dayOfWeek === 0 ? '일요일' : '토요일'}) - 주식 알림 제외`);
+        return false;
+    }
+    
+    // 한국 공휴일 체크 (주요 공휴일만 포함)
+    const month = kstNow.getMonth() + 1;
+    const date = kstNow.getDate();
+    
+    // 신정
+    if (month === 1 && date === 1) return false;
+    
+    // 설날 연휴 (음력이라 정확하지 않음 - 필요시 라이브러리 사용)
+    // 추석 연휴 (음력이라 정확하지 않음 - 필요시 라이브러리 사용)
+    
+    // 어린이날
+    if (month === 5 && date === 5) return false;
+    
+    // 현충일
+    if (month === 6 && date === 6) return false;
+    
+    // 광복절
+    if (month === 8 && date === 15) return false;
+    
+    // 개천절
+    if (month === 10 && date === 3) return false;
+    
+    // 한글날
+    if (month === 10 && date === 9) return false;
+    
+    // 크리스마스
+    if (month === 12 && date === 25) return false;
+    
+    console.log(`-> 📅 평일입니다 - 주식 알림 허용`);
+    return true;
+}
+
+
 // 🎯 자동 상태 초기화 - 새로운 자산이 추가되면 자동으로 상태 생성
 function initializeAssetStates(currentState) {
     let newAssetsAdded = 0;
@@ -692,7 +738,7 @@ async function sendPriceAlertFlexMessage(asset, currentPrice, alertReason, alert
     await sendFlexNotification(flexMessage);
 }
 
-// 🎯 뉴스 알림을 Flex Message로 전송하는 함수  
+// 🎯 뉴스 알림을 Flex Message로 전송하는 함수 (footer 링크 추가)
 async function sendNewsFlexMessage(newsItem) {
     console.log('📤 뉴스 알림 Flex Message 전송 시도...');
     
@@ -713,7 +759,7 @@ async function sendNewsFlexMessage(newsItem) {
     const title = newsItem.title.length > 80 ? newsItem.title.substring(0, 77) + '...' : newsItem.title;
     const description = newsItem.description.length > 150 ? newsItem.description.substring(0, 147) + '...' : newsItem.description;
     
-    // 🎯 뉴스 Flex Message 구조 (보라색)
+    // 🎯 뉴스 Flex Message 구조 (보라색, footer 링크 추가)
     const flexMessage = {
         "content": {
             "type": "flex",
@@ -774,21 +820,30 @@ async function sendNewsFlexMessage(newsItem) {
                             "margin": "md"
                         },
                         {
-                            "type": "button",
-                            "style": "link",
-                            "action": {
-                                "type": "uri",
-                                "uri": newsItem.link
-                            },
-                            "color": "#8B5CF6"
-                        },
-                        {
                             "type": "text",
                             "text": `⏰ ${kstTime}`,
                             "size": "xs",
                             "color": "#888888",
                             "align": "end",
                             "margin": "sm"
+                        }
+                    ]
+                },
+                "footer": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "spacing": "sm",
+                    "contents": [
+                        {
+                            "type": "button",
+                            "style": "primary",
+                            "color": "#8B5CF6",
+                            "height": "sm",
+                            "action": {
+                                "type": "uri",
+                                "label": "📖 전체 기사 보기",
+                                "uri": newsItem.link
+                            }
                         }
                     ]
                 }
@@ -1273,6 +1328,12 @@ async function checkAllEnabledAssets(currentState) {
         console.log(`   검색어: "${asset.query}"`);
         console.log(`   급등락: ±${asset.spikeThreshold}%, 추세이탈: ±${asset.trendThreshold}%`);
         
+        if (asset.type === 'stock' && !isKoreanBusinessDay()) {
+        console.log(`-> 🚫 ${asset.name}: 주말/공휴일로 인해 주식 알림 제외`);
+        continue;
+    }
+
+
         const url = `https://search.naver.com/search.naver?query=${encodeURIComponent(asset.query)}`;
         const html = await fetchWithCurl(url, { isJson: false });
         if (!html) { 
@@ -1513,7 +1574,19 @@ async function sendAutoPeriodicReport(currentState) {
    if (!paycoinAsset) {
        console.log('[정기 리포트] ⚠️ 페이코인 설정을 찾을 수 없습니다. 기본 임계값(1.0%)을 사용합니다.');
    }
+   // 🔥 주식 자산 필터링 (주말/공휴일 제외)
+   const filteredAssets = enabledAssets.filter(asset => {
+       if (asset.type === 'stock' && !isKoreanBusinessDay()) {
+           console.log(`[정기 리포트] 🚫 ${asset.name}: 주말/공휴일로 인해 리포트에서 제외`);
+           return false;
+       }
+       return true;
+   });
    
+   if (filteredAssets.length === 0) {
+       console.log('[정기 리포트] 주말/공휴일로 인해 모든 자산이 제외되어 리포트를 보내지 않습니다.');
+       return;
+   }
    const reportThreshold = paycoinAsset ? paycoinAsset.spikeThreshold : 1.0; // 페이코인의 급등락 임계값 사용
    console.log(`[정기 리포트] 📊 변동 기준: ±${reportThreshold}% (페이코인 급등락 설정값 기준)`);
    

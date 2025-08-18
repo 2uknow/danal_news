@@ -1,0 +1,120 @@
+{
+  "newsLink": null,
+  "newsHistory": [],
+  "assetStates": {
+    "페이코인": {
+      "priceHistory": [
+        120,
+        120,
+        120,
+        120
+      ],
+      "lastAlertPrice": 0,
+      "lastReportPrice": 0,
+      "wasInDeviation": false,
+      "lastTrendAlertTime": 0,
+      "openingPrice": 120,
+      "openingPriceDate": "2025-08-18",
+      "addedDate": "2025-08-18T00:11:54.016Z",
+      "totalAlerts": 0,
+      "lastUpdate": "2025-08-18T00:13:32.634Z"
+    },
+    "다날": {
+      "priceHistory": [
+        7620,
+        7620,
+        7640,
+        7640
+      ],
+      "lastAlertPrice": 0,
+      "lastReportPrice": 0,
+      "wasInDeviation": false,
+      "lastTrendAlertTime": 0,
+      "openingPrice": 7620,
+      "openingPriceDate": "2025-08-18",
+      "addedDate": "2025-08-18T00:11:54.016Z",
+      "totalAlerts": 0,
+      "lastUpdate": "2025-08-18T00:13:33.429Z"
+    },
+    "카카오페이": {
+      "priceHistory": [],
+      "lastAlertPrice": 0,
+      "lastReportPrice": 0,
+      "wasInDeviation": false,
+      "lastTrendAlertTime": 0,
+      "openingPrice": 0,
+      "openingPriceDate": "",
+      "addedDate": "2025-08-18T00:11:54.016Z",
+      "totalAlerts": 0,
+      "lastUpdate": null
+    },
+    "카이아": {
+      "priceHistory": [],
+      "lastAlertPrice": 0,
+      "lastReportPrice": 0,
+      "wasInDeviation": false,
+      "lastTrendAlertTime": 0,
+      "openingPrice": 0,
+      "openingPriceDate": "",
+      "addedDate": "2025-08-18T00:11:54.017Z",
+      "totalAlerts": 0,
+      "lastUpdate": null
+    },
+    "비트코인": {
+      "priceHistory": [
+        163442000,
+        163442000,
+        163442000,
+        163442000
+      ],
+      "lastAlertPrice": 0,
+      "lastReportPrice": 0,
+      "wasInDeviation": false,
+      "lastTrendAlertTime": 0,
+      "openingPrice": 163442000,
+      "openingPriceDate": "2025-08-18",
+      "addedDate": "2025-08-18T00:11:54.017Z",
+      "totalAlerts": 0,
+      "lastUpdate": "2025-08-18T00:13:34.085Z"
+    },
+    "이더리움": {
+      "priceHistory": [
+        6229000,
+        6229000,
+        6228000,
+        6228000
+      ],
+      "lastAlertPrice": 0,
+      "lastReportPrice": 0,
+      "wasInDeviation": false,
+      "lastTrendAlertTime": 0,
+      "openingPrice": 6229000,
+      "openingPriceDate": "2025-08-18",
+      "addedDate": "2025-08-18T00:11:54.017Z",
+      "totalAlerts": 0,
+      "lastUpdate": "2025-08-18T00:13:34.656Z"
+    },
+    "리플": {
+      "priceHistory": [
+        4297,
+        4297,
+        4297,
+        4297
+      ],
+      "lastAlertPrice": 0,
+      "lastReportPrice": 0,
+      "wasInDeviation": false,
+      "lastTrendAlertTime": 0,
+      "openingPrice": 4297,
+      "openingPriceDate": "2025-08-18",
+      "addedDate": "2025-08-18T00:11:54.017Z",
+      "totalAlerts": 0,
+      "lastUpdate": "2025-08-18T00:13:35.306Z"
+    }
+  },
+  "lastPeriodicReportTime": 1755475914017,
+  "newsSearchState": {
+    "currentAssetIndex": 0,
+    "lastSearchTime": 1755476012041
+  }
+}
