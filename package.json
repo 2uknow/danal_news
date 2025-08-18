@@ -1,0 +1,24 @@
+{
+  "name": "danal_news",
+  "version": "1.0.0",
+  "private": true,
+  "description": "네이버 검색 기반 자산 시세/뉴스 모니터링 및 네이버웍스 알림",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon app.js"
+  },
+  "dependencies": {
+    "cheerio": "^1.0.0",
+    "node-cron": "^3.0.3",
+    "node-fetch": "^2.6.12"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  },
+  "engines": {
+    "node": ">=16"
+  },
+  "author": "",
+  "license": "MIT"
+}
