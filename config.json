@@ -1,5 +1,5 @@
 {
-  "webhookUrl": "https://naverworks.danal.co.kr/message/direct/service/channels/2uknow_test",
+  "webhookUrl": "https://naverworks.danal.co.kr/message/direct/service/channels/danal_test",
   "testMode": true,
   "description": "뉴스 알림 테스트용 설정 파일"
 }

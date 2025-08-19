@@ -79,7 +79,6 @@
       "priceHistory": [
         119,
         119,
-        119,
         117,
         117,
         117,
@@ -136,23 +135,24 @@
         116,
         116,
         116,
-        116
+        116,
+        117
       ],
       "lastAlertPrice": 116,
-      "lastReportPrice": 117,
+      "lastReportPrice": 116,
       "wasInDeviation": false,
       "lastTrendAlertTime": 1755613380832,
       "openingPrice": 117,
       "openingPriceDate": "2025-08-19",
       "addedDate": "2025-08-18T00:11:54.016Z",
       "totalAlerts": 6,
-      "lastUpdate": "2025-08-19T14:24:42.423Z"
+      "lastUpdate": "2025-08-19T23:03:12.140Z"
     },
     "다날": {
       "priceHistory": [
         7630,
         7630,
-        7630,
+        7590,
         7590,
         7590,
         7590,
@@ -219,7 +219,7 @@
       "openingPriceDate": "2025-08-19",
       "addedDate": "2025-08-18T00:11:54.016Z",
       "totalAlerts": 5,
-      "lastUpdate": "2025-08-19T14:24:43.088Z"
+      "lastUpdate": "2025-08-19T23:03:12.904Z"
     },
     "카카오페이": {
       "priceHistory": [],
@@ -247,7 +247,6 @@
     },
     "비트코인": {
       "priceHistory": [
-        160359000,
         160359000,
         160359000,
         160535000,
@@ -306,21 +305,21 @@
         159651000,
         159651000,
         159651000,
-        159651000
+        159651000,
+        157899000
       ],
       "lastAlertPrice": 0,
-      "lastReportPrice": 160397000,
+      "lastReportPrice": 159651000,
       "wasInDeviation": false,
       "lastTrendAlertTime": 0,
       "openingPrice": 160535000,
       "openingPriceDate": "2025-08-19",
       "addedDate": "2025-08-18T00:11:54.017Z",
       "totalAlerts": 0,
-      "lastUpdate": "2025-08-19T14:24:43.696Z"
+      "lastUpdate": "2025-08-19T23:03:13.546Z"
     },
     "이더리움": {
       "priceHistory": [
-        5993000,
         5993000,
         5993000,
         5978000,
@@ -379,21 +378,21 @@
         5914000,
         5914000,
         5914000,
-        5914000
+        5914000,
+        5758000
       ],
-      "lastAlertPrice": 0,
-      "lastReportPrice": 5981000,
-      "wasInDeviation": false,
-      "lastTrendAlertTime": 0,
+      "lastAlertPrice": 5758000,
+      "lastReportPrice": 5914000,
+      "wasInDeviation": true,
+      "lastTrendAlertTime": 1755644594154,
       "openingPrice": 5978000,
       "openingPriceDate": "2025-08-19",
       "addedDate": "2025-08-18T00:11:54.017Z",
-      "totalAlerts": 0,
-      "lastUpdate": "2025-08-19T14:24:44.199Z"
+      "totalAlerts": 1,
+      "lastUpdate": "2025-08-19T23:03:14.154Z"
     },
     "리플": {
       "priceHistory": [
-        4157,
         4157,
         4157,
         4186,
@@ -452,22 +451,23 @@
         4148,
         4148,
         4144,
-        4144
+        4144,
+        4036
       ],
-      "lastAlertPrice": 0,
-      "lastReportPrice": 4186,
-      "wasInDeviation": false,
-      "lastTrendAlertTime": 0,
+      "lastAlertPrice": 4036,
+      "lastReportPrice": 4144,
+      "wasInDeviation": true,
+      "lastTrendAlertTime": 1755644594984,
       "openingPrice": 4186,
       "openingPriceDate": "2025-08-19",
       "addedDate": "2025-08-18T00:11:54.017Z",
-      "totalAlerts": 0,
-      "lastUpdate": "2025-08-19T14:24:44.821Z"
+      "totalAlerts": 1,
+      "lastUpdate": "2025-08-19T23:03:14.983Z"
     }
   },
-  "lastPeriodicReportTime": 1755611145017,
+  "lastPeriodicReportTime": 1755644591076,
   "newsSearchState": {
-    "currentAssetIndex": 1,
-    "lastSearchTime": 1755613481429
+    "currentAssetIndex": 2,
+    "lastSearchTime": 1755644591324
   }
 }
