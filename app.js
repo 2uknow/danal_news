@@ -7,7 +7,18 @@ const https = require('https');
 const cron = require('node-cron');
 
 // --- 1. 설정 (Configuration) ---
-const NAVER_WORKS_HOOK_URL = 'https://naverworks.danal.co.kr/message/direct/service/channels/danal_test';
+let NAVER_WORKS_HOOK_URL = 'https://naverworks.danal.co.kr/message/direct/service/channels/danal_test'; // 기본값
+
+// config.json에서 webhook URL 로드 시도
+try {
+    const config = require('./config.json');
+    if (config.webhookUrl) {
+        NAVER_WORKS_HOOK_URL = config.webhookUrl;
+        console.log('✅ config.json에서 webhook URL 로드됨');
+    }
+} catch (error) {
+    console.log('⚠️ config.json 로드 실패, 기본 URL 사용');
+}
 
 const NEWS_QUERY = '다날';
 
@@ -80,13 +91,311 @@ const MA_PERIOD = 60;  // 다시 60분으로 복원 (원래대로)
 const PERIODIC_REPORT_INTERVAL = 60;
 const STATE_FILE = 'monitoring_state_final.json';
 const MAX_NEWS_HISTORY = 100;
-const MAX_NEWS_AGE_HOURS = 6;
+const MAX_NEWS_AGE_HOURS = 24; // 6시간에서 24시간으로 확대
 
 // 중복 실행 방지를 위한 플래그
 let isRunning = false;
 
 // --- 2. 자동 확장 헬퍼 함수 (Auto-Expansion Helper Functions) ---
 const insecureAgent = new https.Agent({ rejectUnauthorized: false, keepAlive: false });
+
+// 🎯 언론사 추출 함수 - 다양한 선택자로 범용적 추출
+function extractPressFromElement($el) {
+    const pressSelectors = [
+        // 특화 선택자 (네이버 뉴스 최신 구조)
+        '.sds-comps-text:not(.sds-comps-text-type-headline1)',  // SDS 텍스트 (제목 제외)
+        'div > span:first-child',          // 첫 번째 스팬 (언론사명 패턴)
+        '[class*="info"]:not([href])',    // info 클래스 (링크 아닌 것)
+        
+        // 기존 선택자들 (호환성)
+        '.news_info .press',               // 뉴스 정보의 언론사
+        '.info_group .press',              // 정보 그룹의 언론사
+        '.info_group .info:first-child',   // 정보 그룹의 첫 번째 (보통 언론사)
+        '.press',                          // 언론사
+        '.source',                         // 뉴스 소스
+        '.press_name',                     // 언론사명
+        '.cp_name',                        // 공급사 이름
+        '.news_item .info:first-child',    // 뉴스 아이템의 첫 번째 정보
+        'a[class*="info"]:first-child',    // 정보 링크의 첫 번째
+        'span[class*="press"]',            // 언론사 스팬
+        '.outlet',                         // 언론사 아웃렛
+        '.source_name'                     // 소스 이름
+    ];
+    
+    // 🎯 언론사명 후보 검증 함수
+    function isValidPressName(text) {
+        if (!text || text.length < 2 || text.length > 30) return false;
+        
+        // 시간 정보 제외
+        if (text.includes('전') || text.includes('시간') || text.includes('분') || text.includes('일')) return false;
+        if (text.match(/\d+[시분일]/)) return false;
+        if (text.match(/\d{4}[-./]\d{1,2}[-./]\d{1,2}/)) return false;
+        
+        // 일반적인 언론사 단어 킨워드
+        if (text === '뉴스' || text === '기사' || text === '네이버뉴스') return false;
+        
+        // 너무 많이 과분한 내용 제외 (제목이나 내용으로 보이는 경우)
+        if (text.includes('비트코인') || text.includes('하락') || text.includes('달러')) return false;
+        
+        // 언론사 특징 업거나 짧고 의미있는 이름 (예: '뉴스', '타임스', '인덕의', '전자신문' 등 포함)
+        const pressKeywords = ['뉴스', '일보', '경제', '타임스', '투데이', '신문', '미디어', '저널', '매일', '주간'];
+        const hasPressSuffix = pressKeywords.some(keyword => text.includes(keyword));
+        
+        // 짧지만 의미있는 언론사명이거나, 언론사 키워드가 포함된 경우
+        return (text.length <= 10 && text.match(/[\uac00-\ud7a3]/)) || hasPressSuffix;
+    }
+    
+    for (const selector of pressSelectors) {
+        try {
+            const extracted = $el.find(selector).text().trim();
+            if (isValidPressName(extracted)) {
+                return extracted;
+            }
+        } catch (e) {
+            continue;
+        }
+    }
+    return null;
+}
+
+// 🎯 URL에서 언론사 추출 함수 - 동적으로 도메인에서 추출
+function extractPressFromUrl(url) {
+    if (!url) return null;
+    
+    // 주요 언론사 도메인 매핑
+    const pressMapping = {
+        'yna.co.kr': '연합뉴스',
+        'newsis.com': '뉴시스', 
+        'mk.co.kr': '매일경제',
+        'edaily.co.kr': '이데일리',
+        'news1.kr': '뉴스1',
+        'dailian.co.kr': '데일리안',
+        'topstarnews.net': '톱스타뉴스',
+        'newspim.com': '뉴스핌',
+        'finomy.com': '파이낸셜뉴스',
+        'hankyung.com': '한국경제',
+        'etnews.com': '전자신문',
+        'mt.co.kr': '머니투데이',
+        'inews24.com': '아이뉴스24',
+        'biz.chosun.com': '조선비즈',
+        'sedaily.com': '서울경제',
+        'fnnews.com': 'FN뉴스',
+        'ajunews.com': '아주경제',
+        'businesspost.co.kr': '비즈니스포스트',
+        'asiatoday.co.kr': '아시아투데이',
+        'dt.co.kr': '디지털타임스'
+    };
+    
+    // 도메인 매핑에서 찾기
+    for (const [domain, press] of Object.entries(pressMapping)) {
+        if (url.includes(domain)) {
+            return press;
+        }
+    }
+    
+    // 도메인에서 직접 추출 시도
+    try {
+        const urlObj = new URL(url);
+        const domain = urlObj.hostname.replace('www.', '');
+        const parts = domain.split('.');
+        
+        if (parts.length >= 2) {
+            // 도메인의 주요 부분을 언론사명으로 사용 (간단한 매핑)
+            const mainDomain = parts[parts.length - 2];
+            const domainToPress = {
+                'chosun': '조선일보',
+                'donga': '동아일보', 
+                'joongang': '중앙일보',
+                'hani': '한겨레',
+                'khan': '경향신문',
+                'segye': '세계일보',
+                'kmib': '국민일보'
+            };
+            
+            return domainToPress[mainDomain] || null;
+        }
+    } catch (e) {
+        return null;
+    }
+    
+    return null;
+}
+
+// 🎯 설명 텍스트 클리닝 함수 - 중복된 언론사명과 시간 정보 제거
+function cleanDescriptionText(text, pressName, timeText) {
+    if (!text) return text;
+    
+    let cleaned = text;
+    
+    // 언론사명 제거 (정확한 일치와 부분 일치 모두)
+    if (pressName && pressName !== '언론사 미상') {
+        // 언론사명이 반복되는 패턴 제거
+        const pressPattern = new RegExp(pressName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+        cleaned = cleaned.replace(pressPattern, '').trim();
+    }
+    
+    // 시간 정보 제거 (정확한 일치)
+    if (timeText && timeText !== '시간 미상') {
+        const timePattern = new RegExp(timeText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+        cleaned = cleaned.replace(timePattern, '').trim();
+    }
+    
+    // 일반적인 시간 패턴들 제거
+    const timePatterns = [
+        /\d+시간\s*전/g,
+        /\d+분\s*전/g,
+        /\d+일\s*전/g,
+        /\d+주\s*전/g,
+        /\d+개월\s*전/g,
+        /\d{4}-\d{2}-\d{2}/g,
+        /\d{1,2}월\s*\d{1,2}일/g
+    ];
+    
+    timePatterns.forEach(pattern => {
+        cleaned = cleaned.replace(pattern, '').trim();
+    });
+    
+    // 🎯 네이버 뉴스 특수 패턴들 제거
+    const naverPatterns = [
+        /네이버뉴스/g,                    // "네이버뉴스" 제거
+        /네이버\s*뉴스/g,                 // "네이버 뉴스" 제거
+        /Keep에\s*저장/g,                // "Keep에 저장" 제거
+        /Keep에\s*바로가기/g,            // "Keep에 바로가기" 제거
+        /바로가기/g,                     // "바로가기" 제거
+        /저장/g,                         // "저장" 제거 (단독)
+        /언론사\s*선정/g,                // "언론사 선정" 제거
+        /주요기사/g,                     // "주요기사" 제거
+        /심층기획/g,                     // "심층기획" 제거
+        /[A-Z]\d+면\s*\d+단/g,           // "A18면 1단" 등 신문 면 정보 제거
+        /\d+면\s*\d+단/g,               // "18면 1단" 등 신문 면 정보 제거
+        /[A-Z]\d+면\s*TOP/g,              // "A28면 TOP" 등 신문 면 정보 제거
+        /\d+면\s*TOP/g,                  // "15면 TOP" 등 신문 면 정보 제거
+        /면\s*TOP/g,                     // "면 TOP" 등 신문 면 정보 제거
+    ];
+    
+    naverPatterns.forEach(pattern => {
+        cleaned = cleaned.replace(pattern, '').trim();
+    });
+    
+    // 연속된 공백 정리
+    cleaned = cleaned.replace(/\s+/g, ' ').trim();
+    
+    // 시작이나 끝의 불필요한 구두점 제거
+    cleaned = cleaned.replace(/^[.,;:\s]+|[.,;:\s]+$/g, '').trim();
+    
+    // 너무 짧은 텍스트는 빈 문자열 반환 (의미 없는 텍스트)
+    if (cleaned.length < 10) {
+        return '';
+    }
+    
+    return cleaned;
+}
+
+// 🎯 시간 추출 함수 - 다양한 형태의 시간 정보 추출 (네이버 뉴스 최적화)
+function extractTimeFromElement($el) {
+    const timeSelectors = [
+        // 네이버 뉴스 검색 결과 페이지 전용 선택자들
+        '.sds-comps-text-type-body2',        // 본문 텍스트 (시간 포함)
+        '.info_group .info:last-child',      // 정보 그룹의 마지막 (보통 시간)  
+        '.info_group .info:nth-child(2)',    // 정보 그룹의 두 번째 (언론사 다음이 시간)
+        '.news_info .info:last-child',       // 뉴스 정보의 마지막 항목
+        '.info_group .txt_inline',           // 정보 그룹의 텍스트
+        '.date_time',                        // 날짜 시간
+        '.time',                             // 시간
+        '.news_date',                        // 뉴스 날짜
+        'span[class*="time"]',               // 시간 관련 스팬
+        'span[class*="date"]',               // 날짜 관련 스팬
+        '.news_item .info:last-child',       // 뉴스 아이템의 마지막 정보
+        '.publish_date',                     // 발행 날짜
+        '.article_date',                     // 기사 날짜
+        // 추가 네이버 선택자들
+        '.press_date',                       // 언론사 날짜
+        '.txt_inline',                       // 인라인 텍스트
+        '.sub_txt',                          // 서브 텍스트
+        '.desc_txt'                          // 설명 텍스트
+    ];
+    
+    // 1. 특정 선택자에서 시간 추출
+    for (const selector of timeSelectors) {
+        try {
+            const extracted = $el.find(selector).text().trim();
+            if (extracted && isValidTimeText(extracted)) {
+                // 시간 정보만 추출 (설명 텍스트에서 시간 패턴 찾기)
+                const timeFromText = extractTimeFromText(extracted);
+                if (timeFromText) {
+                    return timeFromText;
+                }
+            }
+        } catch (e) {
+            continue;
+        }
+    }
+    
+    // 2. 전체 텍스트에서 시간 패턴 찾기 (폴백)
+    try {
+        const allText = $el.text();
+        return extractTimeFromText(allText);
+    } catch (e) {
+        // 무시
+    }
+    
+    return null;
+}
+
+// 🎯 텍스트에서 시간 정보 추출하는 헬퍼 함수
+function extractTimeFromText(text) {
+    if (!text) return null;
+    
+    const timePatterns = [
+        // 상대적 시간 표현 (긴 단위부터)
+        /(\d+)개월\s*전/g,                      // "2개월 전"
+        /(\d+)주\s*전/g,                        // "1주 전", "2주 전" 🔥 새로 추가
+        /(\d+)일\s*전/g,                        // "1일 전"
+        /(\d+)시간\s*전/g,                      // "5시간 전"
+        /(\d+)분\s*전/g,                        // "30분 전"
+        
+        // 뉴스 기사 특화 패턴들
+        /(\d{1,2})월\s*(\d{1,2})일\s*(오전|오후)\s*(\d{1,2})시\s*(\d{1,2})분/g, // "8월 19일 오전 10시 57분"
+        /(\d{1,2})월\s*(\d{1,2})일\s*(오전|오후)\s*(\d{1,2})[:：]\s*(\d{2})/g,   // "8월 19일 오전 10:57"
+        /(\d{4})[-./년]\s*(\d{1,2})[-./월]\s*(\d{1,2})/g,                      // "2025년 8월 19일"
+        
+        // 기본 시간 형태
+        /(오전|오후)\s*\d{1,2}[:：]\d{2}/g,      // "오전 10:30"
+        /\d{1,2}[:：]\d{2}/g,                   // "14:30"
+        /\d{1,2}월\s*\d{1,2}일/g,               // "1월 15일"
+        /(오늘|어제|그제)\s*\d{1,2}[:：]\d{2}/g, // "오늘 14:30"
+        /\d{4}[-./]\d{1,2}[-./]\d{1,2}/g       // "2024-01-01"
+    ];
+    
+    for (const pattern of timePatterns) {
+        const matches = text.match(pattern);
+        if (matches && matches.length > 0) {
+            return matches[0].trim();
+        }
+    }
+    
+    return null;
+}
+
+// 🎯 유효한 시간 텍스트인지 판단하는 함수
+function isValidTimeText(text) {
+    if (!text || text.length > 30) return false;
+    
+    // 시간 관련 키워드 포함 여부
+    const timeKeywords = ['전', '시간', '분', '일', '오늘', '어제', '월', '일'];
+    const hasTimeKeyword = timeKeywords.some(keyword => text.includes(keyword));
+    
+    // 날짜/시간 패턴 매치 여부
+    const timePatterns = [
+        /\d+[개월주일분시]\s*전/,             // "2개월 전", "1주 전", "5분 전", "2시간 전"
+        /\d{4}[-./]\d{1,2}[-./]\d{1,2}/,      // "2024-01-01"
+        /\d{1,2}[:．]\d{2}/,                  // "14:30"
+        /\d{1,2}월\s*\d{1,2}일/               // "1월 15일"
+    ];
+    const hasTimePattern = timePatterns.some(pattern => pattern.test(text));
+    
+    return hasTimeKeyword || hasTimePattern;
+}
 
 // 🎯 뉴스 검색용 활성화된 자산만 필터링하는 함수
 function getNewsEnabledAssets() {
@@ -745,9 +1054,10 @@ async function sendNewsFlexMessage(newsItem) {
     console.log(`\n📤 [${newsItem.searchedAsset}] Flex Message 뉴스 알림 발송 시작...`);
     
     const flexMessage = {
-        type: 'flex',
-        altText: `📰 [${newsItem.searchedAsset}] ${newsItem.title}`,
-        contents: {
+        "content": {
+            "type": "flex",
+            "altText": `📰 [${newsItem.searchedAsset}] ${newsItem.title}`,
+            "contents": {
             type: 'bubble',
             size: 'mega',
             header: {
@@ -869,6 +1179,7 @@ async function sendNewsFlexMessage(newsItem) {
                 ]
             }
         }
+        }
     };
     
     try {
@@ -907,8 +1218,8 @@ async function fetchWithCurl(url, options = { isJson: true }) {
     } 
 }
 
-// 실제 뉴스 날짜 검증 (시간 표현 기반)
-function isNewsRecentByTime(timeText, maxAgeHours = 6) {
+// 실제 뉴스 날짜 검증 (시간 표현 기반) - 개선된 버전
+function isNewsRecentByTime(timeText, maxAgeHours = 24) { // 24시간으로 확대
     try {
         console.log(`⏰ 시간 텍스트 분석: "${timeText}"`);
         
@@ -928,6 +1239,9 @@ function isNewsRecentByTime(timeText, maxAgeHours = 6) {
             if (hours > maxAgeHours) {
                 console.log(`❌ 너무 오래된 뉴스: ${hours}시간 전`);
                 return false;
+            } else {
+                console.log(`✅ 허용 범위 내 뉴스: ${hours}시간 전`);
+                return true;
             }
         }
         
@@ -940,13 +1254,13 @@ function isNewsRecentByTime(timeText, maxAgeHours = 6) {
             return true;
         }
         
-        // 확실하지 않은 경우 보수적으로 false
-        console.log(`❓ 불확실한 시간 표현, 안전하게 제외: ${timeText}`);
-        return false;
+        // 확실하지 않은 경우도 허용 (더 관대하게)
+        console.log(`❓ 불확실한 시간 표현, 허용: ${timeText}`);
+        return true; // 더 관대하게 변경
         
     } catch (error) {
         console.error(`❌ 시간 파싱 오류: ${error.message}`);
-        return false;
+        return true; // 오류 시 허용하도록 변경
     }
 }
 // 뉴스 중복 체크
@@ -1046,6 +1360,9 @@ async function checkNewsWithRotatingAssets(currentState) {
             '.sds-comps-vertical-layout.NYqAjUWdQsgkJBAODPln',    // 각 뉴스 항목의 메인 컨테이너
             '.sds-comps-vertical-layout.fds-news-item-list-tab',  // 뉴스 아이템 리스트 탭
             'div[data-template-id="layout"]',                     // 레이아웃 템플릿
+            // 🎯 개별 뉴스 항목 선택자들 (KLPGA 같은 개별 뉴스 캐치)
+            '.sds-comps-base-layout.sds-comps-full-layout',      // 개별 뉴스 컨테이너
+            'div[class*="sds-comps-base-layout"][class*="sds-comps-full-layout"]', // 개별 뉴스 (부분 매칭)
             // 기존 선택자들 (호환성)
             '.JYgn_vFQHubpClbvwVL_',    // 메인 뉴스 컨테이너 (새로운 네이버 구조)
             '.fds-news-item-list-desk .JYgn_vFQHubpClbvwVL_', // 더 구체적인 경로
@@ -1061,6 +1378,7 @@ async function checkNewsWithRotatingAssets(currentState) {
 
         let newsItems = [];
         let bestSelector = '';
+        const processedLinks = new Set(); // 중복 링크 방지
 
         // 선택자별로 시도하여 가장 좋은 결과 찾기
         for (const selector of newsSelectors) {
@@ -1074,7 +1392,7 @@ async function checkNewsWithRotatingAssets(currentState) {
                 
                 // 각 뉴스 항목에서 데이터 추출
                 elements.each((index, element) => {
-                    if (index < 10) { // 상위 10개만 처리
+                    if (index < 20 && newsItems.length < 10) { // 상위 20개까지 시도하되 유효한 뉴스는 10개까지
                         console.log(`\n📄 ${targetAsset.name} [${index + 1}] 처리 중...`);
                         
                         const $el = $(element);
@@ -1082,10 +1400,11 @@ async function checkNewsWithRotatingAssets(currentState) {
                         // 다양한 방법으로 정보 추출 시도
                         let title = '', link = '', summary = '', press = '', time = '';
                         
-                        // 제목 추출 (여러 방법 시도)
+                        // 제목 추출 (여러 방법 시도) - 개선된 버전
                         title = $el.find('.sds-comps-text-type-headline1').text().trim() ||
                                $el.find('.news_tit').text().trim() ||
                                $el.find('a[class*="news"]').first().text().trim() ||
+                               $el.find('a').first().text().trim() ||  // 🎯 base-layout에서 첫 번째 a 태그
                                $el.find('h2, h3').text().trim() ||
                                $el.find('.title').text().trim() ||
                                '';
@@ -1101,22 +1420,52 @@ async function checkNewsWithRotatingAssets(currentState) {
                             link = 'https://search.naver.com' + link;
                         }
                         
-                        // 요약/설명 추출
-                        summary = $el.find('.sds-comps-text-type-body2').text().trim() ||
+                        // 요약/설명 추출 - 개선된 버전 (톱스타뉴스 패턴 지원)
+                        summary = $el.find('.sds-comps-text-type-body1').text().trim() ||  // 톱스타뉴스 식 설명 (3줄 제한)
+                                 $el.find('.sds-comps-text-type-body2').text().trim() ||
                                  $el.find('.news_dsc').text().trim() ||
                                  $el.find('.dsc_txt_wrap').text().trim() ||
                                  '';
                         
-                        // 언론사 추출
-                        press = $el.find('.sds-comps-text-type-body3').text().trim() ||
-                               $el.find('.press').text().trim() ||
-                               $el.find('.info_group .press').text().trim() ||
-                               '';
+                        // 🎯 base-layout 요소에서 설명 추출 (제목 제외한 전체 텍스트)
+                        if (!summary && $el.hasClass('sds-comps-base-layout')) {
+                            const fullText = $el.text().trim();
+                            const firstLink = $el.find('a').first();
+                            const titleText = firstLink.text().trim();
+                            
+                            if (fullText && titleText && fullText.length > titleText.length) {
+                                // 제목 부분을 제거하고 나머지를 설명으로 사용
+                                summary = fullText.replace(titleText, '').trim();
+                                // 시작 부분의 불필요한 문자 제거
+                                summary = summary.replace(/^[\s\n\r]+/, '').trim();
+                            }
+                        }
                         
-                        // 시간 추출
-                        time = $el.find('.sds-comps-text-type-caption').text().trim() ||
-                              $el.find('.info_group .txt_inline').text().trim() ||
-                              '';
+                        // 언론사 추출 - 네이버 뉴스 검색 결과 페이지 기준 (범용적 접근)
+                        press = extractPressFromElement($el) || extractPressFromUrl(link) || '언론사 미상';
+                        
+                        // 시간 추출 - 네이버 뉴스 검색 결과 페이지 기준 (범용적 접근 + 디버깅)
+                        time = extractTimeFromElement($el);
+                        
+                        // 시간이 추출되지 않은 경우 설명 텍스트에서 직접 추출 시도
+                        if (!time && summary) {
+                            const extractedFromSummary = extractTimeFromText(summary);
+                            if (extractedFromSummary) {
+                                time = extractedFromSummary;
+                                console.log(`   🔧 설명에서 시간 추출: "${extractedFromSummary}"`);
+                            }
+                        }
+                        
+                        time = time || '시간 미상';
+                        
+                        // 설명 텍스트 클리닝 - 중복된 언론사명과 시간 정보 제거
+                        if (summary) {
+                            const originalSummary = summary;
+                            summary = cleanDescriptionText(summary, press, time);
+                            if (originalSummary !== summary) {
+                                console.log(`   🧹 설명 클리닝: "${originalSummary.substring(0, 50)}..." -> "${summary.substring(0, 50)}..."`);
+                            }
+                        }
                         
                         console.log(`   📝 제목: ${title ? title.substring(0, 50) + '...' : '❌ 추출 실패'}`);
                         console.log(`   🔗 링크: ${link ? link.substring(0, 50) + '...' : '❌ 추출 실패'}`);
@@ -1124,13 +1473,18 @@ async function checkNewsWithRotatingAssets(currentState) {
                         console.log(`   ⏰ 시간: ${time || '❌ 추출 실패'}`);
                         console.log(`   📄 설명: ${summary ? summary.substring(0, 100) + '...' : '❌ 추출 실패'}`);
 
-                        // 키워드 필터링: 제목에 검색 키워드가 포함되어야 함
-                        if (title && link) {
+                        // 키워드 필터링: 제목 또는 설명에 검색 키워드가 포함되어야 함 (개선된 매칭)
+                        if (title && link && !processedLinks.has(link)) { // 중복 링크 체크 추가
+                            processedLinks.add(link); // 링크 추가
                             const searchKeyword = targetAsset.name.toLowerCase();
                             const titleLower = title.toLowerCase();
+                            const descLower = (summary || '').toLowerCase();
                             
-                            if (titleLower.includes(searchKeyword)) {
-                                console.log(`✅ ${targetAsset.name} 키워드 포함 확인`);
+                            // 제목에서만 키워드 검색 (더 정확하게)
+                            const titleMatch = titleLower.includes(searchKeyword);
+                            
+                            if (titleMatch) {
+                                console.log(`✅ ${targetAsset.name} 키워드 포함 확인 (제목에서 발견)`);
                                 
                                 // 시간 필터링
                                 const isRecent = isNewsRecentByTime(time);
@@ -1150,7 +1504,7 @@ async function checkNewsWithRotatingAssets(currentState) {
                                 console.log(`✅ ${targetAsset.name} 뉴스 아이템 추가!`);
                                 
                             } else {
-                                console.log(`🚫 ${targetAsset.name} 키워드 미포함으로 제외`);
+                                console.log(`🚫 ${targetAsset.name} 키워드 미포함으로 제외 (검색어: "${searchKeyword}")`);
                             }
                         } else {
                             console.log(`❌ 필수 정보 부족으로 건너뜀`);
@@ -1897,7 +2251,7 @@ console.log(`📰 뉴스 검색: 자산별 순환 검색 (1분에 하나씩)`);
 console.log(`📊 뉴스 검색 방식: 네이버 개별 검색 (다중 선택자 지원)`);
 console.log(`📋 뉴스 히스토리: 최대 ${MAX_NEWS_HISTORY}개 저장`);
 console.log(`⏰ 뉴스 필터링: 최근 ${MAX_NEWS_AGE_HOURS}시간 이내만 허용`);
-console.log(`📊 검색 범위: 자산별 최신 10개 확인`);
+console.log(`📊 검색 범위: 자산별 최신 20개 확인`);
 console.log(`📤 최대 알림 수: 자산별 2개까지`);
 console.log(`⏰ 정기 리포트: ${PERIODIC_REPORT_INTERVAL}분마다 (페이코인 급등락 기준 변동 시만)`);
 console.log(`📊 이동평균: ${MA_PERIOD}분 기준`);
