@@ -15,7 +15,7 @@
 ### 📰 뉴스 모니터링
 - **자산별 순환 검색**: 1분에 하나씩 자산별로 순차 검색
 - **다중 선택자 지원**: 2025년 네이버 뉴스 구조 대응
-- **스마트 필터링**: 최근 6시간 이내 + 중복 제거
+- **스마트 필터링**: 최근 24시간 이내 + 중복 제거
 - **키워드 매칭**: 제목에 자산명 포함 여부 검증
 
 ### 🎨 Flex Message 지원
@@ -38,7 +38,17 @@ npm install
 ```
 
 ### 2. 환경 설정
-`app.js` 파일에서 네이버웍스 웹훅 URL 설정:
+
+#### 방법 1: config.json 파일 사용 (권장)
+```json
+{
+  "webhookUrl": "https://naverworks.danal.co.kr/message/direct/service/channels/your_channel",
+  "testMode": true,
+  "description": "네이버웍스 알림 설정 파일"
+}
+```
+
+#### 방법 2: app.js 파일에서 직접 설정
 ```javascript
 const NAVER_WORKS_HOOK_URL = 'https://naverworks.danal.co.kr/message/direct/service/channels/danal_test';
 ```
@@ -111,7 +121,7 @@ add                # 새 자산 추가 방법 안내
 
 ### 분석 기준
 - **이동평균**: 60분 기준
-- **뉴스 필터링**: 최근 6시간 이내
+- **뉴스 필터링**: 최근 24시간 이내
 - **뉴스 히스토리**: 최대 100개 저장
 - **추세이탈 쿨다운**: 30분
 
@@ -125,8 +135,10 @@ add                # 새 자산 추가 방법 안내
 ```
 danal_news/
 ├── app.js                      # 메인 애플리케이션
+├── test-news.js               # 뉴스 검색 테스트 스크립트
 ├── package.json               # 의존성 정보
 ├── package-lock.json          # 의존성 잠금 파일
+├── config.json                # 웹훅 설정 파일 (선택사항)
 ├── .gitignore                 # Git 무시 파일
 ├── monitoring_state_final.json # 상태 저장 파일 (자동 생성)
 └── README.md                  # 이 파일
@@ -174,6 +186,41 @@ danal_news/
 - **확장 가능**: 새 자산 타입 쉽게 추가 가능
 - **안정성**: 에러 핸들링 및 중복 실행 방지
 
+## 🧪 테스트
+
+### 뉴스 검색 테스트
+```bash
+node test-news.js
+```
+- 개별 자산별 뉴스 검색 기능 테스트
+- 네이버 뉴스 파싱 로직 검증
+- 웹훅 전송 테스트
+
+### 테스트 설정
+`config.json`에서 테스트 모드 설정:
+```json
+{
+  "testMode": true,
+  "webhookUrl": "https://naverworks.danal.co.kr/message/direct/service/channels/test_channel"
+}
+```
+
+## 🔧 고급 기능
+
+### 2025년 네이버 뉴스 구조 대응
+- **다중 선택자**: 기존 및 신규 네이버 뉴스 레이아웃 모두 지원
+- **SDS 컴포넌트**: 네이버의 새로운 디자인 시스템 파싱
+- **언론사 추출**: 10가지 이상의 선택자로 안정적인 언론사명 추출
+- **자동 폴백**: 파싱 실패 시 다음 선택자로 자동 전환
+
+### 스마트 알림 최적화
+- **변동률 기반**: 페이코인 급등락 기준으로 정기 리포트 필터링
+- **쿨다운 시스템**: 30분 재알림 방지로 스팸 방지
+- **시간대별 주식**: KRX vs NXT 시간에 따른 적절한 가격 소스 선택
+- **중복 제거**: URL 기반 뉴스 중복 검사
+
 ## 📞 지원
 
 문제가 발생하거나 새로운 기능이 필요한 경우, 코드 내 주석을 참고하거나 `help` 명령어를 사용하세요.
+
+claude-monitor --timezone Asia/Tokyo --plan max5
