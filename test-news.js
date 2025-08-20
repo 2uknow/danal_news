@@ -507,7 +507,7 @@ async function fetchWithCurl(url, options = { isJson: true }) {
 }
 
 // 실제 뉴스 날짜 검증 (시간 표현 기반) - 개선된 버전
-function isNewsRecentByTime(timeText, maxAgeHours = 24) { // 24시간으로 확대
+function isNewsRecentByTime(timeText, maxAgeHours = 6) { // 6시간으로 축소
     try {
         console.log(`⏰ 시간 텍스트 분석: "${timeText}"`);
         
@@ -771,7 +771,7 @@ async function testNaverNewsSearchWithSend(assetName, sendMessages = false) {
                         console.log(`✅ ${assetName} 키워드 포함 확인 (제목에서 발견)`);
                         
                         // 시간 필터링
-                        const isRecent = isNewsRecentByTime(time);
+                        const isRecent = isNewsRecentByTime(time, 6); // 6시간 이내만 허용
                         console.log(`⏰ 시간 필터링 결과: ${isRecent ? 'PASS' : 'FAIL'}`);
                         
                         const newsItem = {

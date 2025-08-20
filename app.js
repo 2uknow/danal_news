@@ -331,10 +331,12 @@ function extractTimeFromElement($el) {
         }
     }
     
-    // 2. 전체 텍스트에서 시간 패턴 찾기 (폴백)
+    // 2. 제한된 범위에서 시간 패턴 찾기 (전체 텍스트 대신 처음 300자만)
     try {
         const allText = $el.text();
-        return extractTimeFromText(allText);
+        const limitedText = allText.substring(0, 300); // 처음 300자만 검색하여 다른 뉴스 시간과 혼동 방지
+        console.log(`   🔍 제한된 텍스트에서 시간 검색: "${limitedText.substring(0, 100)}..."`);
+        return extractTimeFromText(limitedText);
     } catch (e) {
         // 무시
     }
@@ -1219,9 +1221,9 @@ async function fetchWithCurl(url, options = { isJson: true }) {
 }
 
 // 실제 뉴스 날짜 검증 (시간 표현 기반) - 개선된 버전
-function isNewsRecentByTime(timeText, maxAgeHours = 24) { // 24시간으로 확대
+function isNewsRecentByTime(timeText, maxAgeHours = 6) { // 6시간으로 축소
     try {
-        console.log(`⏰ 시간 텍스트 분석: "${timeText}"`);
+        console.log(`⏰ 시간 텍스트 분석: "${timeText}" (기준: ${maxAgeHours}시간)`);
         
         // 명확하게 오래된 표현들 체크
         const oldKeywords = ['일 전', '일전', '주 전', '주전', '개월 전', '달 전', '년 전', '년전'];
@@ -1237,16 +1239,16 @@ function isNewsRecentByTime(timeText, maxAgeHours = 24) { // 24시간으로 확�
             const hours = parseInt(timeText.match(/(\d+)시간/)?.[1] || '0');
             console.log(`⏰ ${hours}시간 전 뉴스 (기준: ${maxAgeHours}시간)`);
             if (hours > maxAgeHours) {
-                console.log(`❌ 너무 오래된 뉴스: ${hours}시간 전`);
+                console.log(`❌ 너무 오래된 뉴스: ${hours}시간 전 > ${maxAgeHours}시간`);
                 return false;
             } else {
-                console.log(`✅ 허용 범위 내 뉴스: ${hours}시간 전`);
+                console.log(`✅ 허용 범위 내 뉴스: ${hours}시간 전 ≤ ${maxAgeHours}시간`);
                 return true;
             }
         }
         
-        // 분 단위, 오늘, 어제는 최신으로 간주
-        const recentKeywords = ['분 전', '분전', '오늘', 'today', '어제', 'yesterday'];
+        // 분 단위, 오늘, 어제, 최근은 최신으로 간주
+        const recentKeywords = ['분 전', '분전', '오늘', 'today', '어제', 'yesterday', '최근'];
         const isRecent = recentKeywords.some(keyword => timeText.includes(keyword));
         
         if (isRecent) {
@@ -1444,7 +1446,7 @@ async function checkNewsWithRotatingAssets(currentState) {
                         // 언론사 추출 - 네이버 뉴스 검색 결과 페이지 기준 (범용적 접근)
                         press = extractPressFromElement($el) || extractPressFromUrl(link) || '언론사 미상';
                         
-                        // 시간 추출 - 네이버 뉴스 검색 결과 페이지 기준 (범용적 접근 + 디버깅)
+                        // 시간 추출 - 개선된 방법 (더 정확한 범위에서 추출)
                         time = extractTimeFromElement($el);
                         
                         // 시간이 추출되지 않은 경우 설명 텍스트에서 직접 추출 시도
@@ -1454,6 +1456,13 @@ async function checkNewsWithRotatingAssets(currentState) {
                                 time = extractedFromSummary;
                                 console.log(`   🔧 설명에서 시간 추출: "${extractedFromSummary}"`);
                             }
+                        }
+                        
+                        // 여전히 시간이 없으면 현재 시간 기준으로 "방금 전"으로 처리
+                        if (!time || time === '시간 미상') {
+                            // 네이버 뉴스는 보통 최신 뉴스를 먼저 보여주므로
+                            time = '최근';
+                            console.log(`   🔧 시간 정보 없음, "최근"으로 처리`);
                         }
                         
                         time = time || '시간 미상';
@@ -1487,7 +1496,7 @@ async function checkNewsWithRotatingAssets(currentState) {
                                 console.log(`✅ ${targetAsset.name} 키워드 포함 확인 (제목에서 발견)`);
                                 
                                 // 시간 필터링
-                                const isRecent = isNewsRecentByTime(time);
+                                const isRecent = isNewsRecentByTime(time, 6); // 6시간 이내만 허용
                                 console.log(`⏰ 시간 필터링 결과: ${isRecent ? 'PASS' : 'FAIL'}`);
                                 
                                 const newsItem = {
