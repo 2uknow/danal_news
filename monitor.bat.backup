@@ -1,0 +1,269 @@
+@echo off
+chcp 65001 >nul 2>&1
+title 다날 뉴스 모니터링 시스템
+
+:menu
+cls
+echo ========================================
+echo    다날 뉴스 모니터링 시스템 관리
+echo ========================================
+echo.
+echo [1] 시작하기 (PM2로 실행)
+echo [2] 상태 확인
+echo [3] 로그 보기 (실시간)
+echo [4] 로그 보기 (에러만)
+echo [5] 재시작
+echo [6] 중지
+echo [7] 완전 제거
+echo [8] 메모리 사용량 확인
+echo [9] 성능 모니터링 대시보드
+echo [0] 종료
+echo.
+set /p choice="선택하세요 (0-9): "
+
+if "%choice%"=="1" goto start
+if "%choice%"=="2" goto status
+if "%choice%"=="3" goto logs
+if "%choice%"=="4" goto error_logs
+if "%choice%"=="5" goto restart
+if "%choice%"=="6" goto stop
+if "%choice%"=="7" goto delete
+if "%choice%"=="8" goto memory
+if "%choice%"=="9" goto monitor
+if "%choice%"=="0" goto exit
+
+echo.
+echo 잘못된 선택입니다. 0-9 사이의 숫자를 입력해주세요.
+echo.
+pause
+goto menu
+
+:start
+cls
+echo.
+echo 다날 뉴스 모니터링 시스템을 시작합니다...
+echo.
+
+REM PM2 설치 확인
+echo PM2 상태 확인 중...
+pm2 --version >nul 2>&1
+if errorlevel 1 (
+    echo PM2가 설치되지 않았습니다. 설치하시겠습니까? (y/n)
+    set /p install="답변: "
+    if /i "%install%"=="y" (
+        echo PM2 설치 중...
+        npm install -g pm2
+        if errorlevel 1 (
+            echo PM2 설치 실패! 수동으로 'npm install -g pm2'를 실행해주세요.
+            pause
+            goto menu
+        )
+        echo PM2 설치 완료
+    ) else (
+        echo PM2가 필요합니다. 수동으로 'npm install -g pm2'를 실행해주세요.
+        pause
+        goto menu
+    )
+) else (
+    echo PM2 버전: 
+    pm2 --version
+)
+
+REM 필수 파일 확인
+echo 설정 파일 확인 중...
+if not exist "ecosystem.config.js" (
+    echo ecosystem.config.js 파일이 없습니다!
+    echo.
+    echo 해결 방법:
+    echo    1. setup-monitoring.bat을 먼저 실행하세요
+    echo    2. 또는 파일이 올바른 위치에 있는지 확인하세요
+    echo.
+    pause
+    goto menu
+)
+echo ecosystem.config.js 존재
+
+if not exist "app.js" (
+    echo app.js 파일이 없습니다!
+    echo.
+    echo 해결 방법:
+    echo    올바른 프로젝트 디렉토리에서 실행하고 있는지 확인하세요
+    echo.
+    pause
+    goto menu
+)
+echo app.js 존재
+
+REM 로그 디렉토리 생성
+if not exist "logs" (
+    echo 로그 디렉토리 생성 중...
+    mkdir logs
+)
+echo 로그 디렉토리 준비 완료
+
+REM 기존 프로세스 중지
+echo 기존 프로세스 정리 중...
+pm2 stop danal-news >nul 2>&1
+pm2 delete danal-news >nul 2>&1
+echo 기존 프로세스 정리 완료
+
+REM 새 프로세스 시작
+echo 새 프로세스 시작 중...
+echo.
+pm2 start ecosystem.config.js --silent
+
+if errorlevel 1 (
+    echo.
+    echo 시작 실패! 오류를 확인하세요.
+    echo.
+    echo 문제 해결:
+    echo    1. ecosystem.config.js 파일 내용 확인
+    echo    2. app.js 파일이 올바른지 확인
+    echo    3. 수동으로 'node app.js'가 실행되는지 테스트
+    echo.
+    echo 대안: 수동 시작
+    echo    직접 'node app.js'로 테스트해보세요
+    echo.
+    pause
+    goto menu
+)
+
+echo.
+echo 성공적으로 시작되었습니다!
+echo.
+echo 현재 상태:
+pm2 list
+echo.
+echo 팁: 실시간 로그 보려면 [3] 로그 보기를 선택하세요
+echo.
+pause
+goto menu
+
+:status
+cls
+echo.
+echo 현재 상태:
+pm2 list
+echo.
+pm2 describe danal-news
+echo.
+pause
+goto menu
+
+:logs
+cls
+echo.
+echo 실시간 로그 (Ctrl+C로 종료):
+pm2 logs danal-news
+goto menu
+
+:error_logs
+cls
+echo.
+echo 에러 로그:
+pm2 logs danal-news --err --lines 50
+echo.
+echo 상세 에러 로그 파일들:
+if exist "logs\error.log" (
+    echo.
+    echo === 최신 에러 로그 (마지막 10줄) ===
+    powershell -Command "Get-Content 'logs\error.log' -Tail 10"
+)
+if exist "logs\crash.log" (
+    echo.
+    echo === 크래시 로그 (마지막 5줄) ===
+    powershell -Command "Get-Content 'logs\crash.log' -Tail 5"
+)
+echo.
+pause
+goto menu
+
+:restart
+cls
+echo.
+echo 재시작 중...
+pm2 restart danal-news
+if errorlevel 1 (
+    echo 재시작 실패! 상태를 확인해주세요.
+) else (
+    echo 재시작 완료!
+)
+echo.
+pause
+goto menu
+
+:stop
+cls
+echo.
+echo 중지 중...
+pm2 stop danal-news
+if errorlevel 1 (
+    echo 중지 실패! 상태를 확인해주세요.
+) else (
+    echo 중지 완료!
+)
+echo.
+pause
+goto menu
+
+:delete
+cls
+echo.
+echo 경고: 모든 프로세스와 로그가 제거됩니다.
+set /p confirm="정말로 제거하시겠습니까? (y/n): "
+if /i "%confirm%"=="y" (
+    echo 완전 제거 중...
+    pm2 stop danal-news >nul 2>&1
+    pm2 delete danal-news >nul 2>&1
+    pm2 flush >nul 2>&1
+    echo 제거 완료!
+) else (
+    echo 취소되었습니다.
+)
+echo.
+pause
+goto menu
+
+:memory
+cls
+echo.
+echo 메모리 사용량 확인:
+echo.
+pm2 monit --no-interaction &
+timeout /t 3 >nul
+taskkill /f /im "pm2" >nul 2>&1
+
+echo 시스템 메모리 상태:
+wmic OS get TotalVisibleMemorySize,FreePhysicalMemory /format:table
+echo.
+echo Node.js 프로세스 메모리:
+tasklist /fi "imagename eq node.exe" /fo table
+echo.
+pause
+goto menu
+
+:monitor
+cls
+echo.
+echo 성능 모니터링 대시보드 시작...
+echo (종료하려면 'q'를 입력하거나 Ctrl+C를 누르세요)
+echo.
+pm2 monit
+goto menu
+
+:exit
+cls
+echo.
+echo ========================================
+echo 모니터링 도구를 종료합니다.
+echo ========================================
+echo.
+echo 팁: 다음 명령어들을 직접 사용할 수도 있습니다:
+echo   pm2 logs danal-news       - 실시간 로그
+echo   pm2 monit                 - 모니터링 대시보드
+echo   pm2 restart danal-news    - 재시작
+echo   pm2 stop danal-news       - 중지
+echo.
+echo 아무 키나 누르면 종료됩니다...
+pause >nul
+exit /b 0

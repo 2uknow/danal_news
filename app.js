@@ -6,6 +6,9 @@ const fetch = require('node-fetch');
 const https = require('https');
 const cron = require('node-cron');
 
+// 로깅 시스템 추가
+const { logger, logHelper } = require('./logger');
+
 // --- 1. 설정 (Configuration) ---
 let NAVER_WORKS_HOOK_URL = 'https://naverworks.danal.co.kr/message/direct/service/channels/danal_test'; // 기본값
 
@@ -97,7 +100,15 @@ const MAX_NEWS_AGE_HOURS = 24; // 6시간에서 24시간으로 확대
 let isRunning = false;
 
 // --- 2. 자동 확장 헬퍼 함수 (Auto-Expansion Helper Functions) ---
-const insecureAgent = new https.Agent({ rejectUnauthorized: false, keepAlive: false });
+// HTTP Agent 최적화 (메모리 누수 방지)
+const insecureAgent = new https.Agent({ 
+    rejectUnauthorized: false, 
+    keepAlive: false,
+    maxSockets: 5,
+    maxFreeSockets: 2,
+    timeout: 30000,
+    freeSocketTimeout: 15000
+});
 
 // 🎯 언론사 추출 함수 - 다양한 선택자로 범용적 추출
 function extractPressFromElement($el) {
@@ -834,12 +845,40 @@ function showAssetStatus() {
     console.log(`   뉴스 검색: ${newsEnabled}개 / 전체 ${total}개`);
 }
 
+// 메모리 효율적인 상태 관리
 function readState() {
     try {
         if (fs.existsSync(STATE_FILE)) { 
-            const state = JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8'));
+            const data = fs.readFileSync(STATE_FILE, 'utf-8');
+            
+            // 파일 크기 체크 (10MB 제한)
+            if (data.length > 10 * 1024 * 1024) {
+                console.warn('⚠️ 상태 파일이 너무 큽니다. 백업 후 재생성...');
+                
+                // 백업 생성
+                const backupFile = `${STATE_FILE}.backup.${Date.now()}`;
+                fs.writeFileSync(backupFile, data);
+                
+                // 새 상태로 재생성
+                const newState = { 
+                    newsLink: null, 
+                    newsHistory: [],
+                    assetStates: {}, 
+                    lastPeriodicReportTime: 0 
+                };
+                return initializeAssetStates(newState);
+            }
+            
+            const state = JSON.parse(data);
+            
             if (!state.newsHistory) {
                 state.newsHistory = [];
+            }
+            
+            // 메모리 사용량 최적화: 오래된 뉴스 히스토리 정리
+            if (state.newsHistory && state.newsHistory.length > MAX_NEWS_HISTORY) {
+                console.log(`🗑️ 오래된 뉴스 히스토리 정리: ${state.newsHistory.length} -> ${MAX_NEWS_HISTORY}`);
+                state.newsHistory = state.newsHistory.slice(-MAX_NEWS_HISTORY);
             }
             
             // 🚀 새 자산 자동 초기화
@@ -847,6 +886,17 @@ function readState() {
         }
     } catch (error) { 
         console.error('상태 파일 읽기 오류:', error.message); 
+        
+        // 손상된 파일 백업 후 재생성
+        if (fs.existsSync(STATE_FILE)) {
+            const backupFile = `${STATE_FILE}.corrupted.${Date.now()}`;
+            try {
+                fs.copyFileSync(STATE_FILE, backupFile);
+                console.log(`📋 손상된 상태 파일을 ${backupFile}로 백업했습니다.`);
+            } catch (backupError) {
+                console.error('백업 실패:', backupError.message);
+            }
+        }
     }
     
     const newState = { 
@@ -1199,25 +1249,52 @@ async function sendNewsFlexMessage(newsItem) {
     }
 }
 
+// 메모리 효율적인 fetch 함수 (재시도 로직 추가)
 async function fetchWithCurl(url, options = { isJson: true }) { 
     const headers = options.headers || {}; 
     let headerString = ''; 
     for (const key in headers) { 
         headerString += `-H "${key}: ${headers[key]}" `; 
     } 
-    const command = `curl -s -k -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" ${headerString} "${url}"`;
     
-    try { 
-        const { stdout } = await exec(command, { timeout: 15000 }); 
-        return options.isJson ? JSON.parse(stdout) : stdout; 
-    } catch (error) { 
-        if (error instanceof SyntaxError) { 
-            console.error(`❌ 응답이 JSON 형식이 아닙니다. (URL: ${url})`); 
-        } else { 
-            console.error(`❌ curl 실행 오류 (URL: ${url}):`, error.message); 
+    // 메모리 제한 및 타임아웃 설정 강화
+    const command = `curl -s -k --max-time 15 --max-filesize 10485760 -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" ${headerString} "${url}"`;
+    
+    const maxRetries = 3;
+    let lastError = null;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try { 
+            const { stdout } = await exec(command, { 
+                timeout: 15000,
+                maxBuffer: 10 * 1024 * 1024, // 10MB 제한
+                killSignal: 'SIGTERM',
+                windowsHide: true  // Windows에서 cmd 창 숨기기
+            }); 
+            
+            // 응답 크기 체크
+            if (stdout.length > 10 * 1024 * 1024) { // 10MB 초과
+                console.warn(`⚠️ 응답 크기가 너무 큼: ${Math.round(stdout.length / 1024 / 1024)}MB`);
+                return null;
+            }
+            
+            return options.isJson ? JSON.parse(stdout) : stdout; 
+        } catch (error) { 
+            lastError = error;
+            
+            if (error instanceof SyntaxError) { 
+                console.error(`❌ 응답이 JSON 형식이 아닙니다. (URL: ${url})`); 
+                break; // JSON 파싱 오류는 재시도하지 않음
+            } else if (attempt < maxRetries) {
+                console.warn(`⚠️ 요청 실패 (${attempt}/${maxRetries}), 재시도 중... (URL: ${url})`);
+                await new Promise(resolve => setTimeout(resolve, 1000 * attempt)); // 지수 백오프
+            } else {
+                console.error(`❌ curl 실행 오류 (URL: ${url}):`, error.message); 
+            }
         } 
-        return null; 
-    } 
+    }
+    
+    return null; 
 }
 
 // 실제 뉴스 날짜 검증 (시간 표현 기반) - 개선된 버전
@@ -2310,8 +2387,156 @@ if (process.argv.includes('--interactive')) {
    });
 }
 
-// 크론 스케줄링 (1분마다)
-cron.schedule('* * * * *', runAllChecks);
+// === 에러 핸들링 강화 ===
+process.on('uncaughtException', (error) => {
+    console.error('🚨 예상치 못한 에러 발생:', error);
+    console.error('스택 트레이스:', error.stack);
+    
+    // 로거를 통한 크래시 리포트
+    logHelper.crashReport(error, {
+        type: 'uncaughtException',
+        processId: process.pid,
+        argv: process.argv
+    });
+    
+    // 상태 저장 시도
+    try {
+        if (typeof writeState === 'function' && currentState) {
+            writeState(currentState);
+            console.log('💾 최종 상태 저장 완료');
+            logger.info('최종 상태 저장 완료', { 
+                context: 'uncaughtException',
+                stateKeys: Object.keys(currentState)
+            });
+        }
+    } catch (saveError) {
+        console.error('❌ 상태 저장 실패:', saveError.message);
+        logger.error('상태 저장 실패', { error: saveError.message });
+    }
+    
+    // 5초 후 재시작 (PM2가 처리하도록)
+    setTimeout(() => {
+        console.log('🔄 5초 후 프로세스 종료... PM2가 자동 재시작합니다.');
+        logHelper.systemStop('uncaughtException');
+        process.exit(1);
+    }, 5000);
+});
 
-// 초기 실행
-runAllChecks();
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('🚨 처리되지 않은 Promise 거부:', reason);
+    console.error('Promise:', promise);
+    
+    // 로거를 통한 에러 기록
+    logger.error('처리되지 않은 Promise 거부', {
+        reason: reason?.message || reason,
+        stack: reason?.stack,
+        type: 'unhandledRejection',
+        processId: process.pid,
+        timestamp: new Date().toISOString()
+    });
+});
+
+process.on('SIGINT', () => {
+    console.log('\n🛑 SIGINT 신호 수신. 안전하게 종료 중...');
+    
+    try {
+        // 현재 상태 저장
+        if (typeof writeState === 'function' && currentState) {
+            writeState(currentState);
+            console.log('💾 최종 상태 저장 완료');
+        }
+    } catch (error) {
+        console.error('❌ 종료 시 상태 저장 실패:', error.message);
+    }
+    
+    process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+    console.log('\n🛑 SIGTERM 신호 수신. 안전하게 종료 중...');
+    
+    try {
+        if (typeof writeState === 'function' && currentState) {
+            writeState(currentState);
+            console.log('💾 최종 상태 저장 완료');
+        }
+    } catch (error) {
+        console.error('❌ 종료 시 상태 저장 실패:', error.message);
+    }
+    
+    process.exit(0);
+});
+
+// 메모리 사용량 모니터링
+setInterval(() => {
+    const memUsage = process.memoryUsage();
+    const memoryMB = Math.round(memUsage.heapUsed / 1024 / 1024);
+    
+    if (memoryMB > 400) { // 400MB 초과 시 경고
+        console.warn(`⚠️ 메모리 사용량 높음: ${memoryMB}MB`);
+        logHelper.memoryWarning(memoryMB, 400);
+        
+        // 500MB 초과 시 강제 가비지 컬렉션 시도
+        if (memoryMB > 500 && global.gc) {
+            console.log('🗑️ 가비지 컬렉션 실행...');
+            logger.warn('가비지 컬렉션 실행', { 
+                memoryBeforeGC: memoryMB,
+                threshold: 500 
+            });
+            global.gc();
+            
+            // GC 후 메모리 사용량 확인
+            const memAfterGC = Math.round(process.memoryUsage().heapUsed / 1024 / 1024);
+            logger.info('가비지 컬렉션 완료', {
+                memoryBefore: memoryMB,
+                memoryAfter: memAfterGC,
+                freed: memoryMB - memAfterGC
+            });
+        }
+    }
+}, 60000); // 1분마다 체크
+
+// 크론 스케줄링 (1분마다) - 에러 핸들링 추가
+cron.schedule('* * * * *', async () => {
+    try {
+        await runAllChecks();
+    } catch (error) {
+        console.error('🚨 크론 작업 중 에러 발생:', error);
+        console.error('스택 트레이스:', error.stack);
+        
+        // 에러 로그 기록
+        try {
+            const errorLog = {
+                timestamp: new Date().toISOString(),
+                error: error.message,
+                stack: error.stack,
+                type: 'cronError'
+            };
+            
+            const fs = require('fs');
+            const errorLogFile = './logs/error_crash.log';
+            fs.appendFileSync(errorLogFile, JSON.stringify(errorLog) + '\n');
+        } catch (logError) {
+            console.error('❌ 크론 에러 로그 저장 실패:', logError.message);
+        }
+    }
+});
+
+// 초기 실행 - 에러 핸들링 추가
+(async () => {
+    try {
+        console.log('🚀 초기 실행 시작...');
+        logHelper.systemStart();
+        
+        const startTime = Date.now();
+        await runAllChecks();
+        const duration = Date.now() - startTime;
+        
+        console.log('✅ 초기 실행 완료');
+        logHelper.performance('초기 실행', duration);
+    } catch (error) {
+        console.error('🚨 초기 실행 중 에러 발생:', error);
+        console.error('스택 트레이스:', error.stack);
+        logHelper.crashReport(error, { context: '초기 실행' });
+    }
+})();
