@@ -34,7 +34,7 @@ const ASSETS_TO_WATCH = [
         spikeThreshold: 0.9,      // 급등락 임계값
         trendThreshold: 1.0,      // 추세 이탈 임계값
         enabled: true,            // 가격 모니터링 활성화/비활성화
-        newsEnabled: true         // 🔥 뉴스 검색 활성화/비활성화
+        newsEnabled: false         // 🔥 뉴스 검색 활성화/비활성화
     },
     { 
         name: '다날',       
@@ -93,7 +93,7 @@ const ASSETS_TO_WATCH = [
 const MA_PERIOD = 60;  // 다시 60분으로 복원 (원래대로) 
 const PERIODIC_REPORT_INTERVAL = 60;
 const STATE_FILE = 'monitoring_state_final.json';
-const MAX_NEWS_HISTORY = 100;
+const MAX_NEWS_HISTORY = 1000;
 const MAX_NEWS_AGE_HOURS = 24; // 6시간에서 24시간으로 확대
 
 // 중복 실행 방지를 위한 플래그
@@ -360,12 +360,12 @@ function extractTimeFromText(text) {
     if (!text) return null;
     
     const timePatterns = [
-        // 상대적 시간 표현 (긴 단위부터)
-        /(\d+)개월\s*전/g,                      // "2개월 전"
-        /(\d+)주\s*전/g,                        // "1주 전", "2주 전" 🔥 새로 추가
-        /(\d+)일\s*전/g,                        // "1일 전"
+        // 🔥 수정: 더 구체적이고 최신 시간부터 우선 검사 (분 -> 시간 -> 일 -> 주 -> 개월 순서)
+        /(\d+)분\s*전/g,                        // "30분 전" (가장 최근)
         /(\d+)시간\s*전/g,                      // "5시간 전"
-        /(\d+)분\s*전/g,                        // "30분 전"
+        /(\d+)일\s*전/g,                        // "1일 전"
+        /(\d+)주\s*전/g,                        // "1주 전", "2주 전" 
+        /(\d+)개월\s*전/g,                      // "2개월 전" (가장 오래전)
         
         // 뉴스 기사 특화 패턴들
         /(\d{1,2})월\s*(\d{1,2})일\s*(오전|오후)\s*(\d{1,2})시\s*(\d{1,2})분/g, // "8월 19일 오전 10시 57분"
@@ -380,14 +380,62 @@ function extractTimeFromText(text) {
         /\d{4}[-./]\d{1,2}[-./]\d{1,2}/g       // "2024-01-01"
     ];
     
+    // 🔥 개선된 방법: 모든 패턴을 찾아서 가장 최근 시간을 선택
+    let bestMatch = null;
+    let bestScore = Infinity; // 낮을수록 더 최근
+    
     for (const pattern of timePatterns) {
         const matches = text.match(pattern);
         if (matches && matches.length > 0) {
-            return matches[0].trim();
+            const timeText = matches[0].trim();
+            const score = getTimeScore(timeText); // 시간을 분 단위로 변환해서 점수 계산
+            
+            if (score < bestScore) {
+                bestMatch = timeText;
+                bestScore = score;
+            }
         }
     }
     
-    return null;
+    return bestMatch;
+}
+
+// 🎯 시간 텍스트를 점수로 변환하는 함수 (낮을수록 더 최근)
+function getTimeScore(timeText) {
+    if (!timeText) return Infinity;
+    
+    // 분 전
+    let match = timeText.match(/(\d+)분\s*전/);
+    if (match) {
+        return parseInt(match[1]); // 분 그대로 반환 (5분 전 = 5점)
+    }
+    
+    // 시간 전
+    match = timeText.match(/(\d+)시간\s*전/);
+    if (match) {
+        return parseInt(match[1]) * 60; // 시간을 분으로 변환 (5시간 전 = 300점)
+    }
+    
+    // 일 전
+    match = timeText.match(/(\d+)일\s*전/);
+    if (match) {
+        return parseInt(match[1]) * 24 * 60; // 일을 분으로 변환 (3일 전 = 4320점)
+    }
+    
+    // 주 전
+    match = timeText.match(/(\d+)주\s*전/);
+    if (match) {
+        return parseInt(match[1]) * 7 * 24 * 60; // 주를 분으로 변환
+    }
+    
+    // 개월 전
+    match = timeText.match(/(\d+)개월\s*전/);
+    if (match) {
+        return parseInt(match[1]) * 30 * 24 * 60; // 개월을 분으로 변환 (대략 30일로 계산)
+    }
+    
+    // 기타 패턴들은 보통 최근 시간이므로 중간 점수 부여
+    return 1440; // 1일 정도의 점수 (24시간 * 60분)
 }
 
 // 🎯 유효한 시간 텍스트인지 판단하는 함수
@@ -496,6 +544,8 @@ function initializeAssetStates(currentState) {
                 lastReportPrice: 0,
                 wasInDeviation: false,
                 lastTrendAlertTime: 0,      // 🔥 추가: 마지막 추세이탈 알림 시간
+                lastTrendAlertPrice: 0,     // 🔥 추가: 마지막 추세이탈 알림 가격
+                trendAlertDirection: null,  // 🔥 추가: 마지막 추세이탈 방향 ('up' 또는 'down')
                 openingPrice: 0,
                 openingPriceDate: '',
                 // 🚀 자동 추가 정보
@@ -509,6 +559,8 @@ function initializeAssetStates(currentState) {
             // 기존 자산에 새 필드 추가 (호환성)
             if (!currentState.assetStates[asset.name].hasOwnProperty('lastTrendAlertTime')) {
                 currentState.assetStates[asset.name].lastTrendAlertTime = 0;
+                currentState.assetStates[asset.name].lastTrendAlertPrice = 0;
+                currentState.assetStates[asset.name].trendAlertDirection = null;
                 console.log(`🔄 ${asset.name}에 추세이탈 추적 필드 추가`);
             }
         }
@@ -1333,6 +1385,12 @@ function isNewsRecentByTime(timeText, maxAgeHours = 6) { // 6시간으로 축소
             return true;
         }
         
+        // 🔥 "시간 미상"인 경우는 거부하도록 변경
+        if (timeText.includes('시간 미상') || timeText.includes('미상')) {
+            console.log(`❌ 시간 미상으로 제외: ${timeText}`);
+            return false;
+        }
+        
         // 확실하지 않은 경우도 허용 (더 관대하게)
         console.log(`❓ 불확실한 시간 표현, 허용: ${timeText}`);
         return true; // 더 관대하게 변경
@@ -1435,13 +1493,14 @@ async function checkNewsWithRotatingAssets(currentState) {
         
         // 🎯 2025년 새로운 네이버 뉴스 선택자들 (실제 HTML 기반)
         const newsSelectors = [
-            // 🔥 실제 HTML에서 확인된 선택자들 (우선순위 높음)
+            // 🔥 개별 뉴스 아이템에 더 집중한 선택자들 (우선순위 높음)
+            '.sds-comps-base-layout.sds-comps-full-layout',      // 개별 뉴스 컨테이너
+            'div[class*="sds-comps-base-layout"][class*="sds-comps-full-layout"]', // 개별 뉴스 (부분 매칭)  
+            '.news_item, .list_news li, .bx, .news',             // 전통적인 개별 뉴스 아이템
+            'div[data-template-id="layout"]',                     // 레이아웃 템플릿
+            // 🔥 더 구체적인 개별 뉴스 선택자들
             '.sds-comps-vertical-layout.NYqAjUWdQsgkJBAODPln',    // 각 뉴스 항목의 메인 컨테이너
             '.sds-comps-vertical-layout.fds-news-item-list-tab',  // 뉴스 아이템 리스트 탭
-            'div[data-template-id="layout"]',                     // 레이아웃 템플릿
-            // 🎯 개별 뉴스 항목 선택자들 (KLPGA 같은 개별 뉴스 캐치)
-            '.sds-comps-base-layout.sds-comps-full-layout',      // 개별 뉴스 컨테이너
-            'div[class*="sds-comps-base-layout"][class*="sds-comps-full-layout"]', // 개별 뉴스 (부분 매칭)
             // 기존 선택자들 (호환성)
             '.JYgn_vFQHubpClbvwVL_',    // 메인 뉴스 컨테이너 (새로운 네이버 구조)
             '.fds-news-item-list-desk .JYgn_vFQHubpClbvwVL_', // 더 구체적인 경로
@@ -1471,7 +1530,7 @@ async function checkNewsWithRotatingAssets(currentState) {
                 
                 // 각 뉴스 항목에서 데이터 추출
                 elements.each((index, element) => {
-                    if (index < 20 && newsItems.length < 10) { // 상위 20개까지 시도하되 유효한 뉴스는 10개까지
+                    if (index < Math.min(elements.length, 20) && newsItems.length < 10) { // 더 많은 요소를 시도
                         console.log(`\n📄 ${targetAsset.name} [${index + 1}] 처리 중...`);
                         
                         const $el = $(element);
@@ -1487,6 +1546,20 @@ async function checkNewsWithRotatingAssets(currentState) {
                                $el.find('h2, h3').text().trim() ||
                                $el.find('.title').text().trim() ||
                                '';
+                        
+                        // 🔥 제목 길이 제한 - 너무 긴 제목(여러 뉴스가 연결된 경우) 방지
+                        if (title && title.length > 200) {
+                            // 첫 번째 문장이나 의미있는 부분만 추출
+                            const sentences = title.split(/[.!?…]|\.\.\./).filter(s => s.trim().length > 0);
+                            if (sentences.length > 0) {
+                                title = sentences[0].trim();
+                                console.log(`   ✂️ 제목 길이 제한: ${title.length}자로 단축`);
+                            } else {
+                                // 문장 분할이 안 되면 첫 100자만 사용
+                                title = title.substring(0, 100).trim() + '...';
+                                console.log(`   ✂️ 제목 길이 강제 제한: 100자`);
+                            }
+                        }
                         
                         // 링크 추출
                         link = $el.find('.sds-comps-text-type-headline1').parent().attr('href') ||
@@ -1535,11 +1608,19 @@ async function checkNewsWithRotatingAssets(currentState) {
                             }
                         }
                         
-                        // 여전히 시간이 없으면 현재 시간 기준으로 "방금 전"으로 처리
+                        // 여전히 시간이 없으면 전체 요소 텍스트에서 적극 검색
                         if (!time || time === '시간 미상') {
-                            // 네이버 뉴스는 보통 최신 뉴스를 먼저 보여주므로
-                            time = '최근';
-                            console.log(`   🔧 시간 정보 없음, "최근"으로 처리`);
+                            const fullElementText = $el.text();
+                            const extractedFromFullText = extractTimeFromText(fullElementText);
+                            if (extractedFromFullText) {
+                                time = extractedFromFullText;
+                                console.log(`   🔧 전체 요소에서 시간 추출: "${extractedFromFullText}"`);
+                            } else {
+                                // 🔥 시간 정보를 전혀 찾지 못한 경우에만 "시간 미상"으로 처리
+                                // "최근"으로 처리하면 6시간 필터를 우회하므로 위험함
+                                time = '시간 미상';
+                                console.log(`   ❌ 시간 정보를 찾을 수 없음, "시간 미상"으로 처리`);
+                            }
                         }
                         
                         time = time || '시간 미상';
@@ -1572,17 +1653,12 @@ async function checkNewsWithRotatingAssets(currentState) {
                             if (titleMatch) {
                                 console.log(`✅ ${targetAsset.name} 키워드 포함 확인 (제목에서 발견)`);
                                 
-                                // 시간 필터링
-                                const isRecent = isNewsRecentByTime(time, 6); // 6시간 이내만 허용
-                                console.log(`⏰ 시간 필터링 결과: ${isRecent ? 'PASS' : 'FAIL'}`);
-                                
                                 const newsItem = {
                                     title: title,
                                     link: link,
                                     description: summary || '설명 없음',
                                     press: press || '언론사 미상',
                                     time: time || '시간 미상',
-                                    isRecent: isRecent,
                                     searchedAsset: targetAsset.name
                                 };
                                 
@@ -1597,7 +1673,14 @@ async function checkNewsWithRotatingAssets(currentState) {
                         }
                     }
                 });
-                break; // 성공적으로 추출했으면 루프 종료
+                
+                // 🔥 충분한 뉴스를 찾았거나, 유효한 뉴스가 있으면 계속 시도하지 않음
+                if (newsItems.length >= 3) {
+                    console.log(`✅ ${targetAsset.name} 충분한 뉴스 확보 (${newsItems.length}개), 검색 중단`);
+                    break;
+                }
+                // 적은 수의 뉴스라도 있으면 다음 선택자도 시도해볼 수 있도록 함
+                console.log(`🔄 ${targetAsset.name} 더 많은 뉴스 찾기 위해 다음 선택자 시도 (현재: ${newsItems.length}개)`);
             }
         }
 
@@ -1608,61 +1691,55 @@ async function checkNewsWithRotatingAssets(currentState) {
 
         console.log(`\n=== ${targetAsset.name}: 총 ${newsItems.length}개의 뉴스 아이템 추출 완료 ===`);
 
-        // 각 뉴스 아이템에 대해 시간 기반 필터링 + 중복 체크
+        // 🔥 첫 번째 뉴스만 확인하는 방식으로 변경
         let newNewsCount = 0;
-        let filteredByDate = 0;
-        let filteredByDuplicate = 0;
         
-        console.log(`\n=== ${targetAsset.name} 뉴스 필터링 시작 ===`);
+        console.log(`\n=== ${targetAsset.name} 첫 번째 뉴스 확인 ===`);
         
-        for (const newsItem of newsItems) {
-            console.log(`\n📄 ${targetAsset.name} 처리 중: ${newsItem.title.substring(0, 50)}...`);
+        if (newsItems.length === 0) {
+            console.log(`❌ ${targetAsset.name} 추출된 뉴스가 없습니다.`);
+        } else {
+            // 첫 번째 뉴스만 확인
+            const firstNews = newsItems[0];
+            console.log(`\n📄 ${targetAsset.name} 첫 번째 뉴스 확인: ${firstNews.title.substring(0, 50)}...`);
+            console.log(`   🔗 링크: ${firstNews.link}`);
+            console.log(`   ⏰ 시간: ${firstNews.time}`);
             
-            // 1단계: 시간 표현 기반 날짜 필터링
-            if (!newsItem.isRecent) {
-                filteredByDate++;
-                console.log(`🚫 시간 필터링으로 제외됨`);
-                continue;
+            // 중복 체크 (이미 발송했는지 확인)
+            const isDuplicate = isNewsAlreadySent(firstNews, currentState.newsHistory);
+            console.log(`✅ 중복 여부: ${isDuplicate ? '이미 발송함' : '새로운 뉴스'}`);
+            
+            if (!isDuplicate) {
+                // 새로운 뉴스 발견! 알림 발송
+                console.log(`🎉 ${targetAsset.name} 새로운 뉴스 발견!`);
+                newNewsCount = 1;
+                
+                // 뉴스 히스토리에 추가
+                currentState.newsHistory.push({
+                    title: firstNews.title,
+                    link: firstNews.link,
+                    press: firstNews.press,
+                    time: firstNews.time,
+                    asset: targetAsset.name,
+                    sentAt: new Date().toISOString()
+                });
+                
+                // 히스토리 크기 제한
+                if (currentState.newsHistory.length > MAX_NEWS_HISTORY) {
+                    currentState.newsHistory = currentState.newsHistory.slice(-MAX_NEWS_HISTORY);
+                    console.log(`📋 뉴스 히스토리 정리: 최대 ${MAX_NEWS_HISTORY}개 유지`);
+                }
+                
+                // 🎯 Flex Message로 뉴스 발송
+                await sendNewsFlexMessage(firstNews);
+                
+            } else {
+                console.log(`🔄 ${targetAsset.name} 첫 번째 뉴스는 이미 발송했음. 넘어감.`);
             }
-            
-            // 2단계: 중복 체크
-            const isDuplicate = isNewsAlreadySent(newsItem, currentState.newsHistory);
-            console.log(`✅ 중복 여부: ${isDuplicate ? '중복됨' : '새로움'}`);
-            
-            if (isDuplicate) {
-                filteredByDuplicate++;
-                console.log(`🚫 중복 뉴스로 제외됨`);
-                continue;
-            }
-            
-            // 새로운 뉴스 발견! 알림 발송
-            console.log(`🎉 ${targetAsset.name} 새로운 뉴스 발견!`);
-            newNewsCount++;
-            
-            // 뉴스 히스토리에 추가
-            currentState.newsHistory.push({
-                title: newsItem.title,
-                link: newsItem.link,
-                press: newsItem.press,
-                time: newsItem.time,
-                asset: targetAsset.name,
-                sentAt: new Date().toISOString()
-            });
-            
-            // 히스토리 크기 제한
-            if (currentState.newsHistory.length > MAX_NEWS_HISTORY) {
-                currentState.newsHistory = currentState.newsHistory.slice(-MAX_NEWS_HISTORY);
-                console.log(`📋 뉴스 히스토리 정리: 최대 ${MAX_NEWS_HISTORY}개 유지`);
-            }
-            
-            // 🎯 Flex Message로 뉴스 발송
-            await sendNewsFlexMessage(newsItem);
         }
         
-        console.log(`\n=== ${targetAsset.name} 필터링 결과 ===`);
+        console.log(`\n=== ${targetAsset.name} 처리 결과 ===`);
         console.log(`📊 전체 수집: ${newsItems.length}개`);
-        console.log(`🚫 시간 필터링 제외: ${filteredByDate}개`);
-        console.log(`🚫 중복 필터링 제외: ${filteredByDuplicate}개`);
         console.log(`🎉 새로운 뉴스: ${newNewsCount}개`);
 
     } catch (error) {
@@ -1726,6 +1803,8 @@ async function checkAllEnabledAssets(currentState) {
                 lastReportPrice: 0, 
                 wasInDeviation: false, 
                 lastTrendAlertTime: 0,      // 🔥 추가: 마지막 추세이탈 알림 시간
+                lastTrendAlertPrice: 0,     // 🔥 추가: 마지막 추세이탈 알림 가격
+                trendAlertDirection: null,  // 🔥 추가: 마지막 추세이탈 방향 ('up' 또는 'down')
                 openingPrice: 0, 
                 openingPriceDate: '',
                 addedDate: new Date().toISOString(),
@@ -1847,23 +1926,44 @@ async function checkAllEnabledAssets(currentState) {
                else alertReason = `소폭하락 (${spikePercent.toFixed(2)}%)`;
            }
        }
-       // 2. 🔥 수정된 추세 이탈 체크 (이동평균 대비) - 쿨다운 기능 추가
+       // 2. 🔥 수정된 추세 이탈 체크 (이동평균 대비) - 가격 기준 재알림 방식
        else if (canAnalyzeTrend) {
            const isInDeviation = Math.abs(deviationPercent) >= asset.trendThreshold;
-           const currentTime = Date.now();
-           const timeSinceLastTrendAlert = currentTime - (assetState.lastTrendAlertTime || 0);
-           const cooldownMinutes = 30; // 추세이탈 알림 후 30분 쿨다운
-           const cooldownMs = cooldownMinutes * 60 * 1000;
+           const currentDirection = deviationPercent > 0 ? 'up' : 'down';
            
            console.log(`-> 🎯 추세이탈 상태: ${isInDeviation ? '이탈중' : '정상'}`);
-           console.log(`-> ⏰ 마지막 추세알림: ${assetState.lastTrendAlertTime ? new Date(assetState.lastTrendAlertTime).toLocaleTimeString() : '없음'}`);
-           console.log(`-> ⏱️ 쿨다운 상태: ${timeSinceLastTrendAlert < cooldownMs ? `${Math.ceil((cooldownMs - timeSinceLastTrendAlert) / 60000)}분 남음` : '가능'}`);
+           console.log(`-> 📊 현재 가격: ${currentPrice}, 마지막 알림 가격: ${assetState.lastTrendAlertPrice || '없음'}`);
+           console.log(`-> 🔄 마지막 알림 방향: ${assetState.trendAlertDirection || '없음'}, 현재 방향: ${currentDirection}`);
            
-           // 추세이탈 알림 조건:
-           // 1. 현재 추세이탈 상태이고
-           // 2. 이전에 추세이탈 상태가 아니었거나 (새로운 이탈)
-           // 3. 마지막 추세이탈 알림 후 충분한 시간이 지났을 때 (쿨다운 완료)
-           if (isInDeviation && (!wasInDeviation || timeSinceLastTrendAlert >= cooldownMs)) {
+           let shouldAlert = false;
+           
+           if (isInDeviation) {
+               // 첫 번째 추세이탈 알림 (아직 알림이 없었던 경우)
+               if (!assetState.lastTrendAlertPrice || !assetState.trendAlertDirection) {
+                   shouldAlert = true;
+                   console.log(`-> 🆕 첫 번째 추세이탈 알림 조건 충족`);
+               }
+               // 방향이 바뀐 경우 (상승 -> 하락 또는 하락 -> 상승)
+               else if (assetState.trendAlertDirection !== currentDirection) {
+                   shouldAlert = true;
+                   console.log(`-> 🔄 추세 방향 변경: ${assetState.trendAlertDirection} -> ${currentDirection}`);
+               }
+               // 같은 방향이지만 기준 가격을 더 초과한 경우
+               else if (assetState.trendAlertDirection === currentDirection) {
+                   const priceChangeFromLastAlert = ((currentPrice - assetState.lastTrendAlertPrice) / assetState.lastTrendAlertPrice) * 100;
+                   const absChangeFromLastAlert = Math.abs(priceChangeFromLastAlert);
+                   
+                   // 마지막 알림 가격에서 추가로 trendThreshold% 이상 변동한 경우
+                   if (absChangeFromLastAlert >= asset.trendThreshold) {
+                       shouldAlert = true;
+                       console.log(`-> 📈 기준가격 추가 초과: ${priceChangeFromLastAlert.toFixed(2)}% (기준: ${asset.trendThreshold}%)`);
+                   } else {
+                       console.log(`-> 🔇 기준가격 미달: ${priceChangeFromLastAlert.toFixed(2)}% < ${asset.trendThreshold}%`);
+                   }
+               }
+           }
+           
+           if (shouldAlert) {
                alertEmoji = getEmojiByPercent(deviationPercent, false);
                if (deviationPercent > 0) {
                    const absPercent = Math.abs(deviationPercent);
@@ -1879,11 +1979,11 @@ async function checkAllEnabledAssets(currentState) {
                    else alertReason = `하락 추세이탈 (${deviationPercent.toFixed(2)}%)`;
                }
                
-               // 추세이탈 알림 시간 업데이트
-               assetState.lastTrendAlertTime = currentTime;
-               console.log(`-> 🚨 추세이탈 알림 조건 충족! 다음 추세알림은 ${cooldownMinutes}분 후 가능`);
-           } else if (isInDeviation && timeSinceLastTrendAlert < cooldownMs) {
-               console.log(`-> 🔇 추세이탈 중이지만 쿨다운 시간 (${Math.ceil((cooldownMs - timeSinceLastTrendAlert) / 60000)}분 남음)`);
+               // 알림 기준 가격과 방향 업데이트
+               assetState.lastTrendAlertTime = Date.now();
+               assetState.lastTrendAlertPrice = currentPrice;
+               assetState.trendAlertDirection = currentDirection;
+               console.log(`-> 🚨 추세이탈 알림 조건 충족! 기준 가격 ${currentPrice}으로 업데이트`);
            }
            
            assetState.wasInDeviation = isInDeviation;
@@ -2310,7 +2410,7 @@ function handleCommand(command) {
            console.log('- 자산별 맞춤 가격 파싱 (enabled=true인 자산만)');
            console.log('- 자동 상태 초기화 (새 자산 추가 시)');
            console.log('- 스마트 정기 리포트 (페이코인 급등락 기준 변동 시만 발송)');
-           console.log('- 추세이탈 알림 쿨다운 (30분간 재알림 방지)');
+           console.log('- 추세이탈 가격 기준 재알림 시스템 (울린 가격 기준으로 재설정)');
            console.log('- 🎨 Flex Message 지원 (상승 빨강, 하락 파랑, 뉴스 보라색)');
            break;
            
@@ -2327,7 +2427,7 @@ console.log(`   - 자산 추가 시 자동 검색 및 알림`);
 console.log(`   - 뉴스 자산별 순환 검색 (1분에 하나씩)`);
 console.log(`   - 자산별 맞춤 가격 파싱`);
 console.log(`   - 스마트 정기 리포트 (페이코인 급등락 기준)`);
-console.log(`   - 추세이탈 쿨다운 시스템 (30분)`);
+console.log(`   - 추세이탈 가격 기준 재알림 시스템`);
 console.log(`   - 🎨 Flex Message 지원 (상승 빨강, 하락 파랑, 뉴스 보라색)`);
 
 // 자산 상태 표시
@@ -2341,7 +2441,7 @@ console.log(`📊 검색 범위: 자산별 최신 20개 확인`);
 console.log(`📤 최대 알림 수: 자산별 2개까지`);
 console.log(`⏰ 정기 리포트: ${PERIODIC_REPORT_INTERVAL}분마다 (페이코인 급등락 기준 변동 시만)`);
 console.log(`📊 이동평균: ${MA_PERIOD}분 기준`);
-console.log(`🔇 추세이탈 쿨다운: 30분 (재알림 방지)`);
+console.log(`🔄 추세이탈 재알림: 가격 기준 재설정 방식`);
 
 console.log(`\n💡 새 자산 추가 방법:`);
 console.log(`1. ASSETS_TO_WATCH 배열에 추가`);
@@ -2466,6 +2566,23 @@ process.on('SIGTERM', () => {
     
     process.exit(0);
 });
+
+// 🔥 뉴스 자동 검색 타이머 (1분마다 순환)
+setInterval(async () => {
+    try {
+        const newsEnabledAssets = getNewsEnabledAssets();
+        if (newsEnabledAssets.length === 0) {
+            return; // 뉴스 검색이 활성화된 자산이 없으면 건너뜀
+        }
+
+        console.log(`\n📰 [뉴스] 자동 뉴스 검색 시작... (${newsEnabledAssets.length}개 자산)`);
+        
+        const currentState = readState();
+        await checkNewsWithRotatingAssets(currentState);
+    } catch (error) {
+        console.error('❌ 뉴스 자동 검색 오류:', error.message);
+    }
+}, 60 * 1000); // 1분마다 실행
 
 // 메모리 사용량 모니터링
 setInterval(() => {
