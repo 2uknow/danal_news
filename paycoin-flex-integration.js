@@ -206,13 +206,17 @@ async function sendPaycoinTechnicalAnalysisFlexMessage(alert, webhookUrl) {
 // 🔄 페이코인 기술분석 모니터링을 app.js에 통합하는 함수
 async function integratePaycoinMonitoring(webhookUrl, intervalMinutes = 15) {
     console.log('🪙 페이코인 기술분석 모니터링을 app.js에 통합 시작...');
+    console.log(`⏰ 모니터링 간격: ${intervalMinutes}분 (${intervalMinutes * 60}초)`);
+    console.log('📊 분석 대상: 페이코인(PCI) 거래량, RSI, 이동평균, 볼린저밴드, 고급지표');
+    console.log('🔔 알림 방식: 네이버웍스 Flex Message로 실시간 전송\n');
     
     const alertSystem = new PaycoinAlertSystem();
     
     // 기존 다날 뉴스 체크와 함께 실행되도록 간격 설정
     const monitoringInterval = setInterval(async () => {
         try {
-            console.log(`\n🔍 [${new Date().toLocaleString('ko-KR')}] 페이코인 기술분석 체크...`);
+            console.log(`\n🔍 [${new Date().toLocaleString('ko-KR')}] 페이코인 기술분석 모니터링 시작...`);
+            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
             
             // 페이코인 기술분석 알림 생성
             const alerts = await alertSystem.generatePaycoinAlerts();
@@ -234,8 +238,13 @@ async function integratePaycoinMonitoring(webhookUrl, intervalMinutes = 15) {
             }
             
             if (alerts.length === 0) {
-                console.log('😌 현재 페이코인 기술분석 알림 조건 미충족');
+                console.log('😌 현재 페이코인 기술분석 알림 조건 미충족 (모든 지표 정상 범위)');
+            } else {
+                console.log(`📊 페이코인 기술분석 모니터링 완료: ${alerts.length}개 알림 처리됨`);
             }
+            
+            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            console.log(`⏰ 다음 페이코인 기술분석: ${new Date(Date.now() + intervalMinutes * 60 * 1000).toLocaleString('ko-KR')}\n`);
             
         } catch (error) {
             console.error(`❌ 페이코인 모니터링 오류: ${error.message}`);
@@ -244,12 +253,19 @@ async function integratePaycoinMonitoring(webhookUrl, intervalMinutes = 15) {
     
     // 첫 실행 (5초 후)
     setTimeout(async () => {
-        console.log('🚀 페이코인 기술분석 첫 실행...');
+        console.log('\n🚀 페이코인 기술분석 시스템 첫 실행 시작...');
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
         try {
             const alerts = await alertSystem.generatePaycoinAlerts();
-            for (const alert of alerts) {
-                await sendPaycoinTechnicalAnalysisFlexMessage(alert, webhookUrl);
+            if (alerts.length > 0) {
+                console.log(`📤 첫 실행에서 ${alerts.length}개 알림 전송 시작...`);
+                for (const alert of alerts) {
+                    await sendPaycoinTechnicalAnalysisFlexMessage(alert, webhookUrl);
+                    console.log(`✅ 알림 전송 완료: ${alert.title}`);
+                }
             }
+            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            console.log(`⏰ 정기 모니터링 시작: ${intervalMinutes}분 간격으로 실행됨\n`);
         } catch (error) {
             console.error(`❌ 페이코인 첫 실행 오류: ${error.message}`);
         }

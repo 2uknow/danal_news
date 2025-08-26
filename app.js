@@ -3176,9 +3176,9 @@ cron.schedule('* * * * *', async () => {
         console.log('🪙 페이코인 기술분석 모니터링 시작...');
         integratePaycoinMonitoring(NAVER_WORKS_HOOK_URL, 15);
         
-        // 🏢 다날 주식 기술분석 모니터링 시작 (15분 간격)
-        console.log('🏢 다날 주식 기술분석 모니터링 시작...');
-        startDanalTechnicalMonitoring(NAVER_WORKS_HOOK_URL, 15);
+        // 🏢 다날 주식 기술분석 모니터링 시작 (15분 간격) - DISABLED
+        // console.log('🏢 다날 주식 기술분석 모니터링 시작...');
+        // startDanalTechnicalMonitoring(NAVER_WORKS_HOOK_URL, 15);
         
     } catch (error) {
         console.error('🚨 초기 실행 중 에러 발생:', error);
