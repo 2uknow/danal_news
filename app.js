@@ -6,6 +6,12 @@ const fetch = require('node-fetch');
 const https = require('https');
 const cron = require('node-cron');
 
+// 🪙 페이코인 기술분석 시스템 추가
+const { integratePaycoinMonitoring } = require('./paycoin-flex-integration');
+
+// 🏢 다날 주식 기술분석 시스템 추가
+const { integrateDanalMonitoring, getDanalPriceForApp, checkDanalHealthForApp, startDanalTechnicalMonitoring } = require('./danal-integration');
+
 // 로깅 시스템 추가
 const { logger, logHelper } = require('./logger');
 
@@ -95,6 +101,20 @@ const PERIODIC_REPORT_INTERVAL = 60;
 const STATE_FILE = 'monitoring_state_final.json';
 const MAX_NEWS_HISTORY = 1000;
 const MAX_NEWS_AGE_HOURS = 24; // 6시간에서 24시간으로 확대
+
+// 🕐 NXT/KRX 자동 전환 설정
+const TRADING_SCHEDULE = {
+    autoMode: false,           // true: 시간대별 자동 전환, false: 수동 모드
+    forceMode: 'krx',        // 'auto', 'krx', 'nxt' - 수동 모드 시 강제 사용할 거래소
+    regularHours: {           // 정규장 시간 (KRX)
+        start: 900,           // 09:00
+        end: 1530            // 15:30
+    },
+    nxtHours: {              // NXT 시간
+        start: 800,           // 08:00  
+        end: 2000            // 20:00
+    }
+};
 
 // 중복 실행 방지를 위한 플래그
 let isRunning = false;
@@ -630,35 +650,43 @@ function getPriceSelectors(assetType, assetName) {
     if (assetType === 'crypto') {
         return selectors.crypto;
     } else if (assetType === 'stock') {
-        // 🕐 현재 시간 확인 (한국 시간 기준) - 수정된 부분
-        const now = new Date();
-        const kstNow = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Seoul"}));
-        const hour = kstNow.getHours();
-        const minute = kstNow.getMinutes();
-        const currentTime = hour * 100 + minute; // HHMM 형식
-        
-        // 정규장 시간: 09:00-15:30
-        const marketOpen = 900;   // 09:00
-        const marketClose = 1530; // 15:30
-        
-        // NXT 시간: 08:00-20:00 (정규장 제외)
-        const nxtStart = 800;     // 08:00
-        const nxtEnd = 2000;      // 20:00
-        
+        // 🕐 NXT/KRX 전환 모드 확인
         let tradingSession = 'regular'; // 기본값
         
-        if (currentTime >= marketOpen && currentTime <= marketClose) {
-            // 정규장 시간
-            tradingSession = 'regular';
-            console.log(`-> 📈 ${assetName} 정규장 시간 (${hour}:${minute.toString().padStart(2, '0')}) - 정규장 가격 우선`);
-        } else if (currentTime >= nxtStart && currentTime <= nxtEnd) {
-            // NXT 시간 (정규장 외)
-            tradingSession = 'nxt';
-            console.log(`-> 🌙 ${assetName} NXT 시간 (${hour}:${minute.toString().padStart(2, '0')}) - NXT 가격 우선`);
+        if (!TRADING_SCHEDULE.autoMode) {
+            // 🔧 수동 모드: 강제 설정 사용
+            if (TRADING_SCHEDULE.forceMode === 'nxt') {
+                tradingSession = 'nxt';
+                console.log(`-> 🔧 ${assetName} 수동 모드 - NXT 강제 사용`);
+            } else if (TRADING_SCHEDULE.forceMode === 'krx') {
+                tradingSession = 'regular';
+                console.log(`-> 🔧 ${assetName} 수동 모드 - KRX 강제 사용`);
+            } else {
+                // forceMode가 'auto'인 경우 기본값 사용
+                tradingSession = 'regular';
+                console.log(`-> 🔧 ${assetName} 수동 모드 - 기본값(KRX) 사용`);
+            }
         } else {
-            // 거래 시간 외
-            tradingSession = 'regular'; // 기본값으로 정규장 가격
-            console.log(`-> 😴 ${assetName} 거래 시간 외 (${hour}:${minute.toString().padStart(2, '0')}) - 정규장 가격 사용`);
+            // 🕐 자동 모드: 시간대별 전환
+            const now = new Date();
+            const kstNow = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Seoul"}));
+            const hour = kstNow.getHours();
+            const minute = kstNow.getMinutes();
+            const currentTime = hour * 100 + minute; // HHMM 형식
+            
+            if (currentTime >= TRADING_SCHEDULE.regularHours.start && currentTime <= TRADING_SCHEDULE.regularHours.end) {
+                // 정규장 시간
+                tradingSession = 'regular';
+                console.log(`-> 📈 ${assetName} 정규장 시간 (${hour}:${minute.toString().padStart(2, '0')}) - 정규장 가격 우선`);
+            } else if (currentTime >= TRADING_SCHEDULE.nxtHours.start && currentTime <= TRADING_SCHEDULE.nxtHours.end) {
+                // NXT 시간 (정규장 외)
+                tradingSession = 'nxt';
+                console.log(`-> 🌙 ${assetName} NXT 시간 (${hour}:${minute.toString().padStart(2, '0')}) - NXT 가격 우선`);
+            } else {
+                // 거래 시간 외
+                tradingSession = 'regular'; // 기본값으로 정규장 가격
+                console.log(`-> 😴 ${assetName} 거래 시간 외 (${hour}:${minute.toString().padStart(2, '0')}) - 정규장 가격 사용`);
+            }
         }
         
         return selectors.stock[tradingSession];
@@ -1151,11 +1179,406 @@ async function sendPriceAlertFlexMessage(asset, currentPrice, alertReason, alert
     await sendFlexNotification(flexMessage);
 }
 
+// 🤖 뉴스 감정 분석 함수
+function analyzeNewsSentiment(title, description = '') {
+    console.log(`🤖 뉴스 감정 분석 시작: "${title.substring(0, 50)}..."`);
+    
+    const text = (title + ' ' + description).toLowerCase();
+    
+    // 문장 단위 분리 (마침표, 느낌표, 물음표, 쉼표 등으로 구분)
+    const sentences = text.split(/[.!?;,\n]/).filter(s => s.trim().length > 0);
+    
+    // 호재 키워드 (긍정) - 가중치 시스템
+    const positiveKeywords = {
+        // 초강력 상승 (가중치 5)
+        '폭등': 5, '급등': 4, '치솟': 4, '상한가': 5, '신고가': 4,
+        
+        // 강력 상승 (가중치 3)
+        '급상승': 3, '돌파': 3, '최고가': 3, '뛰어올라': 3, '강세': 3,
+        
+        // 일반 상승 (가중치 2)
+        '상승': 2, '오름': 2, '증가': 2, '고점': 2,
+        
+        // 강력 호재 (가중치 4-5)
+        '흑자전환': 5, '실적개선': 4, '투자유치': 4, '펀딩': 4,
+        '신사업': 3, '업계최초': 4, '1위': 3,
+        
+        // 일반 호재 (가중치 2-3)
+        '호재': 3, '좋은소식': 2, '긍정적': 2, '성공': 3, '성과': 2,
+        '매출증가': 3, '이익증가': 3, '수주': 3, '계약': 2, '협약': 2,
+        '출시': 2, '론칭': 2, '확장': 2, '성장': 2, '개발완료': 2,
+        
+        // 시장 긍정 (가중치 2-3)
+        '관심집중': 2, '주목받': 2, '기대감': 2, '전망밝': 3, '낙관': 2,
+        '회복': 3, '반등': 3, '바닥': 2, '저점': 2, '매수': 2, '투자매력': 2, '기회': 2,
+        
+        // 기업 긍정 (가중치 2-3)
+        '특허': 3, '기술개발': 3, '혁신': 3, '선도': 2,
+        '글로벌': 2, '해외진출': 2, '수출': 2, '파트너십': 2,
+        
+        // 🏢 다날 특화 키워드 (가중치 3-5)
+        '다날': 2, '페이코인': 3, '페이플러스': 3, '간편결제': 4,
+        '핀테크': 3, '결제솔루션': 4, '디지털페이먼트': 4, '페이테크': 3,
+        '코인원': 3, '거래소': 2, '암호화폐결제': 4, '블록체인결제': 4,
+        
+        // 🪙 암호화폐 특화 (가중치 3-5)
+        '상장': 4, '리스팅': 4, '거래량증가': 4, '신규상장': 5,
+        '코인': 2, '토큰': 2, '알트코인': 2, '메인넷': 4,
+        '업비트': 3, '빗썸': 3, '바이낸스': 4, 'dex': 3,
+        '스테이킹': 3, '디파이': 3, 'nft': 3, '메타버스': 3,
+        
+        // 💳 핀테크 특화 (가중치 2-4)
+        '디지털뱅킹': 3, '모바일페이': 3, '전자지갑': 3, '페이앱': 3,
+        '온라인결제': 2, '모바일결제': 3, 'qr결제': 3, '비접촉결제': 3,
+        '금융혁신': 4, '핀테크허브': 3, '스마트뱅킹': 3, '오픈뱅킹': 3
+    };
+    
+    // 악재 키워드 (부정) - 가중치 시스템
+    const negativeKeywords = {
+        // 초강력 하락 (가중치 5)
+        '폭락': 5, '급락': 4, '붕괴': 5, '하한가': 5, '신저가': 4,
+        
+        // 강력 하락 (가중치 3)
+        '급하락': 3, '추락': 3, '최저가': 3, '약세': 3, '하락세': 3,
+        
+        // 일반 하락 (가중치 2)
+        '하락': 2, '떨어져': 2, '감소': 2, '저점': 2,
+        
+        // 강력 악재 (가중치 4-5)
+        '실적악화': 5, '적자': 4, '손실': 3, '중단': 4, '취소': 4,
+        '위기': 4, '충격': 4, '패닉': 5, '투매': 4,
+        
+        // 일반 악재 (가중치 2-3)
+        '악재': 3, '나쁜소식': 2, '부정적': 2, '실패': 3,
+        '매출감소': 3, '이익감소': 3, '연기': 2, '지연': 2,
+        '문제': 2, '리스크': 2, '우려': 2, '불안': 2,
+        
+        // 시장 부정 (가중치 2-3)
+        '매도': 2, '공포': 3, '불신': 2, '의구심': 2,
+        '경계': 2, '주의': 2, '위험': 3, '버블': 3, '거품': 3,
+        
+        // 기업 부정 (가중치 3-4)
+        '소송': 3, '분쟁': 3, '제재': 4, '처벌': 4, '감사': 2, '수사': 4,
+        '횡령': 5, '비리': 4, '스캔들': 4, '논란': 2, '규제': 3,
+        
+        // 🏢 다날/핀테크 특화 악재 (가중치 3-5)
+        '결제오류': 4, '시스템장애': 4, '보안사고': 5, '해킹': 5,
+        '개인정보유출': 5, '금융사고': 5, '서비스중단': 4, '장애발생': 4,
+        '페이앱오류': 3, '결제실패': 3, '인증오류': 3, '금융당국': 4,
+        
+        // 🪙 암호화폐 특화 악재 (가중치 3-5)
+        '상장폐지': 5, '델리스팅': 5, '거래정지': 5, '출금중단': 5,
+        '코인해킹': 5, '거래소해킹': 5, '지갑해킹': 5, '스캠': 5,
+        '폰지': 5, '러그풀': 5, '코인사기': 5, '가상화폐규제': 4,
+        '채굴금지': 4, '거래금지': 4, '암호화폐금지': 4,
+        
+        // 💳 핀테크 규제 악재 (가중치 3-4)
+        '핀테크규제': 4, '금융규제': 4, '결제규제': 3, '라이선스취소': 5,
+        '영업정지': 5, '업무개선명령': 4, '과징금': 3, '제재조치': 4
+    };
+    
+    // 중립 키워드 (팩트 위주) - 가중치 시스템
+    const neutralKeywords = {
+        '발표': 1, '공시': 1, '보고': 1, '예정': 1, '계획': 1, '전망': 1,
+        '분석': 1, '예측': 1, '의견': 1, '평가': 1, '검토': 1, '논의': 1
+    };
+    
+    // 시간/규모 수식어 패턴 정의 (임팩트 크기 조절)
+    const timeScalePatterns = {
+        // 시간 관련 수식어
+        '단기': 0.7, '초단기': 0.5, '일시적': 0.6, '순간적': 0.5,
+        '중기': 1.0, '단중기': 0.8, 
+        '장기': 1.3, '장기적': 1.3, '지속적': 1.4, '지속가능': 1.5,
+        '항구적': 1.6, '영구적': 1.8, '구조적': 1.7,
+        
+        // 규모 관련 수식어  
+        '소규모': 0.6, '소폭': 0.5, '미소': 0.3, '제한적': 0.6, '부분적': 0.7,
+        '중규모': 1.0, '적당한': 1.0, '보통': 1.0,
+        '대규모': 1.8, '대폭': 2.0, '전면적': 2.2, '광범위': 2.0,
+        '초대형': 2.5, '메가': 2.3, '기가': 2.5, '전체': 2.0, '전 세계': 2.8,
+        
+        // 빈도 관련 수식어
+        '처음': 1.5, '최초': 1.6, '첫': 1.3, '신규': 1.2,
+        '재차': 1.1, '다시': 1.0, '반복': 0.9, '또다시': 0.8,
+        '연속': 1.4, '지속': 1.3, '계속': 1.2, '꾸준히': 1.3,
+        
+        // 강도 관련 수식어 (기존 intensityPatterns와 보완)
+        '완전': 2.0, '절대': 2.2, '100%': 2.5, '전적으로': 2.1,
+        '반': 0.5, '절반': 0.5, '부분': 0.7, '일부': 0.6
+    };
+    
+    let positiveScore = 0;
+    let negativeScore = 0;
+    let neutralScore = 0;
+    
+    let foundPositive = [];
+    let foundNegative = [];
+    let foundNeutral = [];
+    
+    // 부정어 패턴 정의
+    const negationPatterns = [
+        '안', '않', '없', '못', '아니', '부족', '미흡', '불가', '금지', '중지'
+    ];
+    
+    // 강도 표현 패턴 정의 (배수 적용)
+    const intensityPatterns = {
+        '매우': 2.0, '아주': 2.0, '상당히': 1.8, '크게': 1.8, '대폭': 2.2,
+        '급격히': 2.0, '급속히': 1.8, '대규모': 2.0, '대량': 1.8,
+        '엄청': 2.5, '극도로': 2.5, '심각하게': 2.2, '현저히': 1.8,
+        '압도적으로': 2.3, '폭발적으로': 2.5, '기록적으로': 2.2,
+        '사상최대': 3.0, '역대최고': 2.8, '역대최저': 2.8,
+        '소폭': 0.5, '미미하게': 0.3, '약간': 0.6, '다소': 0.7, '조금': 0.5
+    };
+    
+    // 부정어 및 강도 표현 처리 함수
+    function processAdvancedSentiment(text, keywords, isPositive) {
+        let score = 0;
+        let found = [];
+        
+        Object.entries(keywords).forEach(([keyword, weight]) => {
+            // 일반 매칭
+            const matches = (text.match(new RegExp(keyword, 'g')) || []).length;
+            if (matches > 0) {
+                // 키워드 앞뒤 10글자 범위에서 맥락 분석
+                const keywordRegex = new RegExp(`(.{0,10})${keyword}(.{0,10})`, 'g');
+                const contexts = [...text.matchAll(keywordRegex)];
+                
+                let positiveMatches = 0;
+                let negativeMatches = 0;
+                let totalIntensityMultiplier = 1.0;
+                
+                contexts.forEach(match => {
+                    const before = match[1] || '';
+                    const after = match[2] || '';
+                    const context = before + after;
+                    
+                    // 부정어가 있는지 확인
+                    const hasNegation = negationPatterns.some(neg => context.includes(neg));
+                    
+                    // 강도 표현 확인 및 배수 계산
+                    let intensityMultiplier = 1.0;
+                    let timeScaleMultiplier = 1.0;
+                    
+                    // 강도 표현 패턴 확인
+                    Object.entries(intensityPatterns).forEach(([pattern, multiplier]) => {
+                        if (context.includes(pattern)) {
+                            intensityMultiplier = Math.max(intensityMultiplier, multiplier);
+                        }
+                    });
+                    
+                    // 시간/규모 패턴 확인
+                    Object.entries(timeScalePatterns).forEach(([pattern, multiplier]) => {
+                        if (context.includes(pattern)) {
+                            timeScaleMultiplier = Math.max(timeScaleMultiplier, multiplier);
+                        }
+                    });
+                    
+                    // 두 배수를 조합 (최대값 제한)
+                    const combinedMultiplier = Math.min(intensityMultiplier * timeScaleMultiplier, 5.0);
+                    totalIntensityMultiplier *= combinedMultiplier;
+                    
+                    if (hasNegation) {
+                        negativeMatches++;
+                    } else {
+                        positiveMatches++;
+                    }
+                });
+                
+                if (positiveMatches > 0) {
+                    const baseScore = positiveMatches * weight;
+                    const finalScore = Math.round(baseScore * totalIntensityMultiplier);
+                    score += isPositive ? finalScore : -finalScore;
+                    
+                    const multiplierText = totalIntensityMultiplier !== 1.0 ? `×${totalIntensityMultiplier.toFixed(1)}` : '';
+                    found.push(`${keyword}(${positiveMatches}×${weight}${multiplierText}=${finalScore})`);
+                }
+                
+                if (negativeMatches > 0) {
+                    const baseScore = negativeMatches * weight;
+                    const finalScore = Math.round(baseScore * totalIntensityMultiplier);
+                    score += isPositive ? -finalScore : finalScore;
+                    
+                    const multiplierText = totalIntensityMultiplier !== 1.0 ? `×${totalIntensityMultiplier.toFixed(1)}` : '';
+                    found.push(`${keyword}_부정(${negativeMatches}×${weight}${multiplierText}=${finalScore})`);
+                }
+            }
+        });
+        
+        return { score, found };
+    }
+    
+    // 문장별 맥락 분석 함수
+    function analyzeContextualSentiment() {
+        let totalPositiveScore = 0;
+        let totalNegativeScore = 0;
+        let totalNeutralScore = 0;
+        let allFoundPositive = [];
+        let allFoundNegative = [];
+        let allFoundNeutral = [];
+        
+        // 문장별로 감정 분석
+        sentences.forEach((sentence, index) => {
+            if (sentence.trim().length < 3) return; // 너무 짧은 문장 제외
+            
+            console.log(`   문장 ${index + 1}: "${sentence.trim()}"`);
+            
+            // 각 문장에 대해 고급 감정 분석 수행
+            const sentencePositive = processAdvancedSentiment(sentence, positiveKeywords, true);
+            const sentenceNegative = processAdvancedSentiment(sentence, negativeKeywords, false);
+            const sentenceNeutral = processAdvancedSentiment(sentence, neutralKeywords, true);
+            
+            // 문장별 감정 우세도 계산 (한 문장에서 혼재된 감정 처리)
+            const sentenceTotal = Math.abs(sentencePositive.score) + Math.abs(sentenceNegative.score);
+            let sentenceWeight = 1.0;
+            
+            // 문장 길이에 따른 가중치 (긴 문장일수록 중요도 증가)
+            if (sentence.length > 30) sentenceWeight *= 1.2;
+            else if (sentence.length < 10) sentenceWeight *= 0.8;
+            
+            // 제목에 가까운 문장일수록 중요도 증가
+            if (index === 0) sentenceWeight *= 1.5; // 첫 번째 문장 (제목 부분)
+            
+            // 조건부 문장 감지 ("만약", "가정하면" 등 - 가중치 감소)
+            if (sentence.includes('만약') || sentence.includes('가정') || sentence.includes('예상') || 
+                sentence.includes('전망') || sentence.includes('예측')) {
+                sentenceWeight *= 0.7;
+                console.log(`     → 조건부/예측 문장으로 가중치 감소: ${sentenceWeight.toFixed(1)}`);
+            }
+            
+            // 감정이 혼재된 경우 처리
+            if (sentenceTotal > 0) {
+                const positiveRatio = Math.abs(sentencePositive.score) / sentenceTotal;
+                const negativeRatio = Math.abs(sentenceNegative.score) / sentenceTotal;
+                
+                // 우세한 감정에 더 많은 가중치 부여
+                const adjustedPositive = Math.round(sentencePositive.score * sentenceWeight * positiveRatio);
+                const adjustedNegative = Math.round(sentenceNegative.score * sentenceWeight * negativeRatio);
+                const adjustedNeutral = Math.round(sentenceNeutral.score * sentenceWeight);
+                
+                totalPositiveScore += adjustedPositive;
+                totalNegativeScore += adjustedNegative;
+                totalNeutralScore += adjustedNeutral;
+                
+                console.log(`     → 감정점수: 긍정=${adjustedPositive}, 부정=${adjustedNegative}, 중립=${adjustedNeutral}`);
+                
+                // 발견된 키워드에 문장 번호 추가
+                sentencePositive.found.forEach(item => 
+                    allFoundPositive.push(`[문장${index + 1}]${item}`));
+                sentenceNegative.found.forEach(item => 
+                    allFoundNegative.push(`[문장${index + 1}]${item}`));
+                sentenceNeutral.found.forEach(item => 
+                    allFoundNeutral.push(`[문장${index + 1}]${item}`));
+            }
+        });
+        
+        return {
+            positiveScore: Math.max(0, totalPositiveScore),
+            negativeScore: Math.max(0, totalNegativeScore),
+            neutralScore: Math.abs(totalNeutralScore),
+            foundPositive: allFoundPositive,
+            foundNegative: allFoundNegative,
+            foundNeutral: allFoundNeutral
+        };
+    }
+    
+    // 맥락 기반 감정 분석 실행
+    const contextualResult = analyzeContextualSentiment();
+    
+    // 맥락 분석 결과 적용
+    positiveScore = contextualResult.positiveScore;
+    negativeScore = contextualResult.negativeScore;
+    neutralScore = contextualResult.neutralScore;
+    
+    // 발견된 키워드 목록 (문장 번호 포함)
+    foundPositive = contextualResult.foundPositive;
+    foundNegative = contextualResult.foundNegative;
+    foundNeutral = contextualResult.foundNeutral;
+    
+    // 감정 분류 및 신뢰도 계산
+    const totalScore = positiveScore + negativeScore + neutralScore;
+    let sentiment, confidence, emoji;
+    
+    if (totalScore === 0) {
+        sentiment = 'neutral';
+        confidence = 0.3; // 키워드가 없으면 낮은 신뢰도
+        emoji = '😐';
+    } else if (positiveScore > negativeScore) {
+        const ratio = positiveScore / (positiveScore + negativeScore);
+        sentiment = 'positive';
+        confidence = Math.min(0.9, 0.5 + ratio * 0.4); // 0.5~0.9
+        
+        if (positiveScore >= 3) emoji = '🚀'; // 강한 호재
+        else if (positiveScore >= 2) emoji = '📈'; // 호재  
+        else emoji = '😊'; // 약간 긍정
+    } else if (negativeScore > positiveScore) {
+        const ratio = negativeScore / (positiveScore + negativeScore);
+        sentiment = 'negative';
+        confidence = Math.min(0.9, 0.5 + ratio * 0.4); // 0.5~0.9
+        
+        if (negativeScore >= 3) emoji = '💀'; // 강한 악재
+        else if (negativeScore >= 2) emoji = '📉'; // 악재
+        else emoji = '😰'; // 약간 부정
+    } else {
+        sentiment = 'neutral';
+        confidence = 0.6;
+        emoji = '🤔';
+    }
+    
+    const result = {
+        sentiment: sentiment,
+        confidence: Math.round(confidence * 100),
+        emoji: emoji,
+        scores: {
+            positive: positiveScore,
+            negative: negativeScore,
+            neutral: neutralScore
+        },
+        keywords: {
+            positive: foundPositive,
+            negative: foundNegative,
+            neutral: foundNeutral
+        }
+    };
+    
+    // 로그 출력
+    console.log(`   감정: ${sentiment} (${emoji})`);
+    console.log(`   신뢰도: ${result.confidence}%`);
+    console.log(`   점수: 긍정 ${positiveScore}, 부정 ${negativeScore}, 중립 ${neutralScore}`);
+    if (foundPositive.length > 0) console.log(`   🟢 긍정 키워드: ${foundPositive.join(', ')}`);
+    if (foundNegative.length > 0) console.log(`   🔴 부정 키워드: ${foundNegative.join(', ')}`);
+    if (foundNeutral.length > 0) console.log(`   ⚪ 중립 키워드: ${foundNeutral.join(', ')}`);
+    
+    return result;
+}
+
 // 기존 중복된 sendNewsFlexMessage 함수들을 모두 제거하고 이것으로 교체
 
 // 🎯 뉴스 알림을 Flex Message로 전송하는 함수 (footer 링크 추가)
 async function sendNewsFlexMessage(newsItem) {
     console.log(`\n📤 [${newsItem.searchedAsset}] Flex Message 뉴스 알림 발송 시작...`);
+    
+    // 🤖 뉴스 감정 분석 수행
+    const sentimentAnalysis = analyzeNewsSentiment(newsItem.title, newsItem.description || '');
+    
+    // 감정에 따른 헤더 색상 결정
+    let headerColor = '#1E3A8A'; // 기본 파란색 (뉴스)
+    let headerText = '📰 뉴스 알림';
+    
+    if (sentimentAnalysis.confidence >= 60) { // 신뢰도 60% 이상일 때만 색상 변경
+        switch (sentimentAnalysis.sentiment) {
+            case 'positive':
+                headerColor = '#059669'; // 초록색 (호재)
+                headerText = `📰 뉴스 알림 ${sentimentAnalysis.emoji}`;
+                break;
+            case 'negative':
+                headerColor = '#DC2626'; // 빨간색 (악재)
+                headerText = `📰 뉴스 알림 ${sentimentAnalysis.emoji}`;
+                break;
+            default:
+                headerText = `📰 뉴스 알림 ${sentimentAnalysis.emoji}`;
+                break;
+        }
+    }
     
     const flexMessage = {
         "content": {
@@ -1169,11 +1592,11 @@ async function sendNewsFlexMessage(newsItem) {
                 layout: 'vertical',
                 paddingTop: 'md',
                 paddingBottom: 'sm',
-                backgroundColor: '#1E3A8A',
+                backgroundColor: headerColor,
                 contents: [
                     {
                         type: 'text',
-                        text: '📰 뉴스 알림',
+                        text: headerText,
                         color: '#FFFFFF',
                         weight: 'bold',
                         size: 'md'
@@ -1245,6 +1668,28 @@ async function sendNewsFlexMessage(newsItem) {
                                         text: newsItem.time,
                                         size: 'sm',
                                         color: '#6B7280',
+                                        margin: 'sm',
+                                        flex: 1
+                                    }
+                                ]
+                            },
+                            {
+                                type: 'box',
+                                layout: 'baseline',
+                                margin: 'sm',
+                                contents: [
+                                    {
+                                        type: 'text',
+                                        text: '🤖',
+                                        size: 'sm',
+                                        flex: 0
+                                    },
+                                    {
+                                        type: 'text',
+                                        text: `감정분석: ${sentimentAnalysis.emoji} ${sentimentAnalysis.sentiment} (${sentimentAnalysis.confidence}%)`,
+                                        size: 'sm',
+                                        color: sentimentAnalysis.sentiment === 'positive' ? '#059669' : 
+                                               sentimentAnalysis.sentiment === 'negative' ? '#DC2626' : '#6B7280',
                                         margin: 'sm',
                                         flex: 1
                                     }
@@ -1882,26 +2327,28 @@ async function checkAllEnabledAssets(currentState) {
        let alertEmoji = '';
        let wasInDeviation = assetState.wasInDeviation || false;
        
-       // 🚀 단계별 이모지 함수 (상승 빨강, 하락 파랑)
+       // 🚀 멋진 단계별 이모지 함수 (임팩트 & 에너지 강화)
        function getEmojiByPercent(percent, isSpike = false) {
            const absPercent = Math.abs(percent);
            
            if (percent > 0) {
-               // 상승 이모지 (빨간색 계열)
-               if (absPercent >= 10) return '🔴';      // 10% 이상 대폭등
-               if (absPercent >= 7) return '🟥';       // 7% 이상 폭등  
-               if (absPercent >= 5) return '📈';       // 5% 이상 급등
-               if (absPercent >= 3) return '🔺';       // 3% 이상 상승
-               if (absPercent >= 1) return '🟠';       // 1% 이상 소폭상승
-               return '🟢';                             // 1% 미만 미세상승
+               // 🔥 상승 이모지 (임팩트 & 에너지 강화)
+               if (absPercent >= 15) return '🚀💥';    // 15% 이상 초대형 폭등 (로켓+폭발)
+               if (absPercent >= 10) return '🚀🔥';    // 10% 이상 대폭등 (로켓+불)
+               if (absPercent >= 7) return '🔥📈';     // 7% 이상 폭등 (불+차트)
+               if (absPercent >= 5) return '⚡📈';     // 5% 이상 급등 (번개+차트)
+               if (absPercent >= 3) return '💎🔺';     // 3% 이상 상승 (다이아몬드+삼각)
+               if (absPercent >= 1) return '✨🟢';     // 1% 이상 소폭상승 (반짝+초록)
+               return '🌟';                             // 1% 미만 미세상승 (별)
            } else {
-               // 하락 이모지 (파란색 계열)
-               if (absPercent >= 10) return '🔵';      // 10% 이상 대폭락
-               if (absPercent >= 7) return '🟦';       // 7% 이상 폭락
-               if (absPercent >= 5) return '📉';       // 5% 이상 급락
-               if (absPercent >= 3) return '🔻';       // 3% 이상 하락
-               if (absPercent >= 1) return '🟪';       // 1% 이상 소폭하락
-               return '🔴';                             // 1% 미만 미세하락
+               // 💀 하락 이모지 (임팩트 & 긴장감 강화)
+               if (absPercent >= 15) return '💀⚡';    // 15% 이상 초대형 폭락 (해골+번개)
+               if (absPercent >= 10) return '💀🔥';    // 10% 이상 대폭락 (해골+불)
+               if (absPercent >= 7) return '⚠️📉';     // 7% 이상 폭락 (경고+차트)
+               if (absPercent >= 5) return '💥📉';     // 5% 이상 급락 (폭발+차트)
+               if (absPercent >= 3) return '❄️🔻';     // 3% 이상 하락 (얼음+삼각)
+               if (absPercent >= 1) return '😰💧';     // 1% 이상 소폭하락 (땀+물방울)
+               return '😔';                             // 1% 미만 미세하락 (아쉬움)
            }
        }
        
@@ -2142,24 +2589,26 @@ async function sendAutoPeriodicReport(currentState) {
                if (Math.abs(changeFromLastReport) > 0.01) {
                    changeTexts.push(`리포트: ${changeFromLastReport > 0 ? '+' : ''}${changeFromLastReport.toFixed(2)}%`);
                    
-                   // 변동률에 따른 이모지 결정 (상승 빨강, 하락 파랑)
+                   // 🚀 멋진 변동률 이모지 (임팩트 강화)
                    const absPercent = Math.abs(changeFromLastReport);
                    if (changeFromLastReport > 0) {
-                       // 상승 이모지 (빨간색 계열)
-                       if (absPercent >= 10) statusEmoji = '🔴';      // 10% 이상 대폭등
-                       else if (absPercent >= 7) statusEmoji = '🟥';  // 7% 이상 폭등  
-                       else if (absPercent >= 5) statusEmoji = '📈';  // 5% 이상 급등
-                       else if (absPercent >= 3) statusEmoji = '🔺';  // 3% 이상 상승
-                       else if (absPercent >= 1) statusEmoji = '🟠';  // 1% 이상 소폭상승
-                       else statusEmoji = '🟢';                       // 1% 미만 미세상승
+                       // 🔥 상승 이모지 (에너지 & 임팩트)
+                       if (absPercent >= 15) statusEmoji = '🚀💥';      // 15% 이상 초대형 폭등
+                       else if (absPercent >= 10) statusEmoji = '🚀🔥'; // 10% 이상 대폭등
+                       else if (absPercent >= 7) statusEmoji = '🔥📈';  // 7% 이상 폭등  
+                       else if (absPercent >= 5) statusEmoji = '⚡📈';  // 5% 이상 급등
+                       else if (absPercent >= 3) statusEmoji = '💎🔺';  // 3% 이상 상승
+                       else if (absPercent >= 1) statusEmoji = '✨🟢';  // 1% 이상 소폭상승
+                       else statusEmoji = '🌟';                         // 1% 미만 미세상승
                    } else {
-                       // 하락 이모지 (파란색 계열)
-                       if (absPercent >= 10) statusEmoji = '🔵';      // 10% 이상 대폭락
-                       else if (absPercent >= 7) statusEmoji = '🟦';  // 7% 이상 폭락
-                       else if (absPercent >= 5) statusEmoji = '📉';  // 5% 이상 급락
-                       else if (absPercent >= 3) statusEmoji = '🔻';  // 3% 이상 하락
-                       else if (absPercent >= 1) statusEmoji = '🟪';  // 1% 이상 소폭하락
-                       else statusEmoji = '🔴';                       // 1% 미만 미세하락
+                       // 💀 하락 이모지 (긴장감 & 임팩트)
+                       if (absPercent >= 15) statusEmoji = '💀⚡';      // 15% 이상 초대형 폭락
+                       else if (absPercent >= 10) statusEmoji = '💀🔥'; // 10% 이상 대폭락
+                       else if (absPercent >= 7) statusEmoji = '⚠️📉';  // 7% 이상 폭락
+                       else if (absPercent >= 5) statusEmoji = '💥📉';  // 5% 이상 급락
+                       else if (absPercent >= 3) statusEmoji = '❄️🔻';  // 3% 이상 하락
+                       else if (absPercent >= 1) statusEmoji = '😰💧';  // 1% 이상 소폭하락
+                       else statusEmoji = '😔';                         // 1% 미만 미세하락
                    }
                }
            }
@@ -2282,6 +2731,7 @@ async function runAllChecks() {
        await Promise.all([
            checkNewsWithRotatingAssets(currentState),     // 🔥 변경: 자산별 순환 뉴스 검색
            checkAllEnabledAssets(currentState)            // 🚀 활성화된 모든 자산 자동 모니터링
+           // 🏢 다날 기술분석은 별도 스케줄러에서 실행됨 (5분 간격)
        ]);
        
        writeState(currentState);
@@ -2412,6 +2862,68 @@ function handleCommand(command) {
            console.log('- 스마트 정기 리포트 (페이코인 급등락 기준 변동 시만 발송)');
            console.log('- 추세이탈 가격 기준 재알림 시스템 (울린 가격 기준으로 재설정)');
            console.log('- 🎨 Flex Message 지원 (상승 빨강, 하락 파랑, 뉴스 보라색)');
+           console.log('');
+           console.log('=== 🕐 NXT/KRX 거래소 전환 ===');
+           console.log('- nxt-auto 또는 auto: 시간대별 자동 전환');
+           console.log('- nxt-manual 또는 manual: 수동 모드 (기본 KRX)');
+           console.log('- force-nxt 또는 nxt: NXT 강제 사용');
+           console.log('- force-krx 또는 krx: KRX 강제 사용');
+           console.log('- trading-status: 현재 거래소 설정 상태 확인');
+           break;
+           
+       // 🕐 NXT/KRX 거래소 전환 관련 명령어 추가
+       case 'nxt-auto':
+       case 'auto':
+           TRADING_SCHEDULE.autoMode = true;
+           console.log('✅ NXT/KRX 자동 전환 모드 활성화 (시간대별 자동 전환)');
+           break;
+           
+       case 'nxt-manual':
+       case 'manual':
+           TRADING_SCHEDULE.autoMode = false;
+           TRADING_SCHEDULE.forceMode = 'auto';
+           console.log('🔧 NXT/KRX 수동 모드 활성화 (기본값: KRX)');
+           break;
+           
+       case 'force-nxt':
+       case 'nxt':
+           TRADING_SCHEDULE.autoMode = false;
+           TRADING_SCHEDULE.forceMode = 'nxt';
+           console.log('🌙 NXT 거래소 강제 사용 모드');
+           break;
+           
+       case 'force-krx':
+       case 'krx':
+           TRADING_SCHEDULE.autoMode = false;
+           TRADING_SCHEDULE.forceMode = 'krx';
+           console.log('🏛️ KRX 거래소 강제 사용 모드');
+           break;
+           
+       case 'trading-status':
+       case '거래소상태':
+           console.log('\n🕐 현재 거래소 설정:');
+           console.log(`자동 모드: ${TRADING_SCHEDULE.autoMode ? '✅ 활성화' : '❌ 비활성화'}`);
+           console.log(`강제 모드: ${TRADING_SCHEDULE.forceMode}`);
+           console.log(`정규장 시간: ${Math.floor(TRADING_SCHEDULE.regularHours.start/100)}:${(TRADING_SCHEDULE.regularHours.start%100).toString().padStart(2,'0')} ~ ${Math.floor(TRADING_SCHEDULE.regularHours.end/100)}:${(TRADING_SCHEDULE.regularHours.end%100).toString().padStart(2,'0')}`);
+           console.log(`NXT 시간: ${Math.floor(TRADING_SCHEDULE.nxtHours.start/100)}:${(TRADING_SCHEDULE.nxtHours.start%100).toString().padStart(2,'0')} ~ ${Math.floor(TRADING_SCHEDULE.nxtHours.end/100)}:${(TRADING_SCHEDULE.nxtHours.end%100).toString().padStart(2,'0')}`);
+           
+           // 현재 시간대 표시
+           const now = new Date();
+           const kstNow = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Seoul"}));
+           const hour = kstNow.getHours();
+           const minute = kstNow.getMinutes();
+           const currentTime = hour * 100 + minute;
+           
+           let currentSession = '';
+           if (currentTime >= TRADING_SCHEDULE.regularHours.start && currentTime <= TRADING_SCHEDULE.regularHours.end) {
+               currentSession = '📈 정규장 시간 (KRX)';
+           } else if (currentTime >= TRADING_SCHEDULE.nxtHours.start && currentTime <= TRADING_SCHEDULE.nxtHours.end) {
+               currentSession = '🌙 NXT 시간';
+           } else {
+               currentSession = '😴 거래 시간 외';
+           }
+           
+           console.log(`현재 시간: ${hour}:${minute.toString().padStart(2, '0')} - ${currentSession}`);
            break;
            
        default:
@@ -2455,6 +2967,11 @@ console.log(`- "news-enable 자산명": 뉴스 검색 시작`);
 console.log(`- "disable 자산명": 가격 모니터링 중지`);
 console.log(`- "news-disable 자산명": 뉴스 검색 중지`);
 console.log(`- "help": 전체 도움말`);
+
+console.log(`\n🕐 거래소 전환 설정:`);
+console.log(`- 자동 모드: ${TRADING_SCHEDULE.autoMode ? '✅ 활성화' : '❌ 비활성화'}`);
+console.log(`- 강제 모드: ${TRADING_SCHEDULE.forceMode}`);
+console.log(`- "trading-status" 명령어로 상세 확인 가능`);
 
 console.log(`\n🎨 Flex Message 색상 구분:`);
 console.log(`- 🔴 급등 알림: 빨간색 헤더`);
@@ -2654,6 +3171,15 @@ cron.schedule('* * * * *', async () => {
         
         console.log('✅ 초기 실행 완료');
         logHelper.performance('초기 실행', duration);
+        
+        // 🪙 페이코인 기술분석 모니터링 시작 (15분 간격)
+        console.log('🪙 페이코인 기술분석 모니터링 시작...');
+        integratePaycoinMonitoring(NAVER_WORKS_HOOK_URL, 15);
+        
+        // 🏢 다날 주식 기술분석 모니터링 시작 (15분 간격)
+        console.log('🏢 다날 주식 기술분석 모니터링 시작...');
+        startDanalTechnicalMonitoring(NAVER_WORKS_HOOK_URL, 15);
+        
     } catch (error) {
         console.error('🚨 초기 실행 중 에러 발생:', error);
         console.error('스택 트레이스:', error.stack);

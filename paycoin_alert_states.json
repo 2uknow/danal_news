@@ -1,0 +1,28 @@
+{
+  "macd": {
+    "lastSignal": null,
+    "lastAlert": 0
+  },
+  "stochastic": {
+    "lastSignal": null,
+    "lastAlert": 0
+  },
+  "fibonacci": {
+    "lastLevel": "78.6%",
+    "lastPrice": 118,
+    "lastAlert": 1756196564622
+  },
+  "ichimoku": {
+    "lastSignal": "bearish",
+    "lastCloudColor": "bearish",
+    "lastAlert": 1756196564622
+  },
+  "obv": {
+    "lastDivergence": null,
+    "lastAlert": 0
+  },
+  "vwap": {
+    "lastDeviation": null,
+    "lastAlert": 0
+  }
+}
