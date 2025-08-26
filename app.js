@@ -32,7 +32,7 @@ const ASSETS_TO_WATCH = [
         query: '페이코인 시세',   
         type: 'crypto', 
         spikeThreshold: 0.9,      // 급등락 임계값
-        trendThreshold: 1.0,      // 추세 이탈 임계값
+        trendThreshold: 1.8,      // 추세 이탈 임계값
         enabled: true,            // 가격 모니터링 활성화/비활성화
         newsEnabled: false         // 🔥 뉴스 검색 활성화/비활성화
     },
@@ -2567,7 +2567,9 @@ process.on('SIGTERM', () => {
     process.exit(0);
 });
 
-// 🔥 뉴스 자동 검색 타이머 (1분마다 순환)
+// 🔥 뉴스 자동 검색 타이머 - 중복 발송 방지를 위해 주석 처리
+// (Promise.all에서 checkNewsWithRotatingAssets 함수가 이미 실행되므로 중복 제거)
+/*
 setInterval(async () => {
     try {
         const newsEnabledAssets = getNewsEnabledAssets();
@@ -2583,6 +2585,7 @@ setInterval(async () => {
         console.error('❌ 뉴스 자동 검색 오류:', error.message);
     }
 }, 60 * 1000); // 1분마다 실행
+*/
 
 // 메모리 사용량 모니터링
 setInterval(() => {
