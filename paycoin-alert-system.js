@@ -61,7 +61,9 @@ class PaycoinAlertSystem {
                     extremeAlert: true        // 극단값 알림
                 },
                 obv: {
-                    divergenceAlert: true     // 다이버전스
+                    divergenceAlert: true,     // 다이버전스
+                    minConfidence: 0.7,        // 최소 신뢰도 70%
+                    cooldownHours: 6           // 6시간 쿨다운
                 },
                 vwap: {
                     deviationAlert: true      // VWAP 이탈
@@ -789,7 +791,7 @@ class PaycoinAlertSystem {
                     if ((isNewSignal || isNewCloudColor) && cooldownPassed) {
                         if (currentSignal === 'bullish') {
                             alerts.push(this.createAdvancedAlert('ichimoku_bullish', {
-                                title: `☁️📈 페이코인 일목균형표 ${isNewSignal ? '신규 ' : ''}강세 신호!`,
+                                title: `☁️ 페이코인 일목균형표 ${isNewSignal ? '신규 ' : ''}강세 신호!`,
                                 message: [
                                     `☁️ 가격이 강세 구름 위에서 거래${isNewSignal ? ' (신규 돌파!)' : ''}`,
                                     `📊 전환선: ${ichi.ichimoku.tenkanSen.toFixed(2)}원`,
@@ -810,7 +812,7 @@ class PaycoinAlertSystem {
                             }));
                         } else if (currentSignal === 'bearish') {
                             alerts.push(this.createAdvancedAlert('ichimoku_bearish', {
-                                title: `☁️📉 페이코인 일목균형표 ${isNewSignal ? '신규 ' : ''}약세 신호!`,
+                                title: `☁️ 페이코인 일목균형표 ${isNewSignal ? '신규 ' : ''}약세 신호!`,
                                 message: [
                                     `☁️ 가격이 약세 구름 아래에서 거래${isNewSignal ? ' (신규 이탈!)' : ''}`,
                                     `📊 전환선: ${ichi.ichimoku.tenkanSen.toFixed(2)}원`,
@@ -840,15 +842,26 @@ class PaycoinAlertSystem {
                 }
             }
             
-            // OBV 다이버전스 알림
+            // OBV 다이버전스 알림 (쿨다운 및 중복 방지)
             if (this.alertConfig.advanced.obv.divergenceAlert && advancedData.obv) {
                 const obv = advancedData.obv;
-                if (obv.signal === 'bullish_divergence') {
+                const obvState = this.advancedAlertStates.obv;
+                
+                // OBV 다이버전스는 의미있는 변화일 때만 알림 (6시간 쿨다운, 신뢰도 체크)
+                const obvCooldown = this.alertConfig.advanced.obv.cooldownHours * 60 * 60 * 1000;
+                const canAlert = now - obvState.lastAlert > obvCooldown;
+                const isNewSignal = obvState.lastDivergence !== obv.signal;
+                const hasHighConfidence = (obv.confidence || 0) >= this.alertConfig.advanced.obv.minConfidence;
+                
+                console.log(`📊 OBV 다이버전스 체크: 신호=${obv.signal}, 신뢰도=${((obv.confidence || 0) * 100).toFixed(0)}%, 쿨다운=${canAlert}, 새신호=${isNewSignal}, 고신뢰=${hasHighConfidence}`);
+                
+                if (canAlert && isNewSignal && hasHighConfidence && obv.signal === 'bullish_divergence') {
                     alerts.push(this.createAdvancedAlert('obv_bullish_divergence', {
-                        title: '📊💡 페이코인 OBV 상승 다이버전스 발생!',
+                        title: '💡 페이코인 OBV 상승 다이버전스 발생!',
                         message: [
                             `📊 OBV: ${obv.obv.toLocaleString()}`,
                             `📈 거래량 추세: ${obv.trend === 'increasing' ? '증가' : '감소'}`,
+                            `🎯 신뢰도: ${((obv.confidence || 0) * 100).toFixed(0)}%`,
                             ``,
                             `📖 OBV 상승 다이버전스 해설:`,
                             `• On-Balance Volume = 거래량과 가격 변화 관계 분석`,
@@ -862,12 +875,19 @@ class PaycoinAlertSystem {
                         level: 'medium',
                         data: { obv }
                     }));
-                } else if (obv.signal === 'bearish_divergence') {
+                    
+                    // 상태 업데이트
+                    obvState.lastDivergence = obv.signal;
+                    obvState.lastAlert = now;
+                    this.saveAlertStates();
+                    
+                } else if (canAlert && isNewSignal && hasHighConfidence && obv.signal === 'bearish_divergence') {
                     alerts.push(this.createAdvancedAlert('obv_bearish_divergence', {
-                        title: '📊⚠️ 페이코인 OBV 하락 다이버전스 경고!',
+                        title: '⚠️ 페이코인 OBV 하락 다이버전스 경고!',
                         message: [
                             `📊 OBV: ${obv.obv.toLocaleString()}`,
                             `📉 거래량 추세: ${obv.trend === 'increasing' ? '증가' : '감소'}`,
+                            `🎯 신뢰도: ${((obv.confidence || 0) * 100).toFixed(0)}%`,
                             ``,
                             `📖 OBV 하락 다이버전스 해설:`,
                             `• 가격 상승 + OBV 하락 = 매도세 증가 신호`,
@@ -881,6 +901,11 @@ class PaycoinAlertSystem {
                         level: 'medium',
                         data: { obv }
                     }));
+                    
+                    // 상태 업데이트
+                    obvState.lastDivergence = obv.signal;
+                    obvState.lastAlert = now;
+                    this.saveAlertStates();
                 }
             }
             

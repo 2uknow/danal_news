@@ -2333,21 +2333,21 @@ async function checkAllEnabledAssets(currentState) {
            
            if (percent > 0) {
                // 🔥 상승 이모지 (임팩트 & 에너지 강화)
-               if (absPercent >= 15) return '🚀💥';    // 15% 이상 초대형 폭등 (로켓+폭발)
-               if (absPercent >= 10) return '🚀🔥';    // 10% 이상 대폭등 (로켓+불)
-               if (absPercent >= 7) return '🔥📈';     // 7% 이상 폭등 (불+차트)
-               if (absPercent >= 5) return '⚡📈';     // 5% 이상 급등 (번개+차트)
-               if (absPercent >= 3) return '💎🔺';     // 3% 이상 상승 (다이아몬드+삼각)
-               if (absPercent >= 1) return '✨🟢';     // 1% 이상 소폭상승 (반짝+초록)
+               if (absPercent >= 15) return '🚀';    // 15% 이상 초대형 폭등
+               if (absPercent >= 10) return '🚀';    // 10% 이상 대폭등
+               if (absPercent >= 7) return '🔥';     // 7% 이상 폭등
+               if (absPercent >= 5) return '⚡';     // 5% 이상 급등
+               if (absPercent >= 3) return '💎';     // 3% 이상 상승
+               if (absPercent >= 1) return '✨';     // 1% 이상 소폭상승
                return '🌟';                             // 1% 미만 미세상승 (별)
            } else {
                // 💀 하락 이모지 (임팩트 & 긴장감 강화)
-               if (absPercent >= 15) return '💀⚡';    // 15% 이상 초대형 폭락 (해골+번개)
-               if (absPercent >= 10) return '💀🔥';    // 10% 이상 대폭락 (해골+불)
-               if (absPercent >= 7) return '⚠️📉';     // 7% 이상 폭락 (경고+차트)
-               if (absPercent >= 5) return '💥📉';     // 5% 이상 급락 (폭발+차트)
-               if (absPercent >= 3) return '❄️🔻';     // 3% 이상 하락 (얼음+삼각)
-               if (absPercent >= 1) return '😰💧';     // 1% 이상 소폭하락 (땀+물방울)
+               if (absPercent >= 15) return '💀';    // 15% 이상 초대형 폭락
+               if (absPercent >= 10) return '💀';    // 10% 이상 대폭락
+               if (absPercent >= 7) return '⚠️';     // 7% 이상 폭락
+               if (absPercent >= 5) return '💥';     // 5% 이상 급락
+               if (absPercent >= 3) return '❄️';     // 3% 이상 하락
+               if (absPercent >= 1) return '😰';     // 1% 이상 소폭하락
                return '😔';                             // 1% 미만 미세하락 (아쉬움)
            }
        }
@@ -2593,21 +2593,21 @@ async function sendAutoPeriodicReport(currentState) {
                    const absPercent = Math.abs(changeFromLastReport);
                    if (changeFromLastReport > 0) {
                        // 🔥 상승 이모지 (에너지 & 임팩트)
-                       if (absPercent >= 15) statusEmoji = '🚀💥';      // 15% 이상 초대형 폭등
-                       else if (absPercent >= 10) statusEmoji = '🚀🔥'; // 10% 이상 대폭등
-                       else if (absPercent >= 7) statusEmoji = '🔥📈';  // 7% 이상 폭등  
-                       else if (absPercent >= 5) statusEmoji = '⚡📈';  // 5% 이상 급등
-                       else if (absPercent >= 3) statusEmoji = '💎🔺';  // 3% 이상 상승
-                       else if (absPercent >= 1) statusEmoji = '✨🟢';  // 1% 이상 소폭상승
+                       if (absPercent >= 15) statusEmoji = '🚀';      // 15% 이상 초대형 폭등
+                       else if (absPercent >= 10) statusEmoji = '🚀'; // 10% 이상 대폭등
+                       else if (absPercent >= 7) statusEmoji = '🔥';  // 7% 이상 폭등  
+                       else if (absPercent >= 5) statusEmoji = '⚡';  // 5% 이상 급등
+                       else if (absPercent >= 3) statusEmoji = '💎';  // 3% 이상 상승
+                       else if (absPercent >= 1) statusEmoji = '✨';  // 1% 이상 소폭상승
                        else statusEmoji = '🌟';                         // 1% 미만 미세상승
                    } else {
                        // 💀 하락 이모지 (긴장감 & 임팩트)
-                       if (absPercent >= 15) statusEmoji = '💀⚡';      // 15% 이상 초대형 폭락
-                       else if (absPercent >= 10) statusEmoji = '💀🔥'; // 10% 이상 대폭락
-                       else if (absPercent >= 7) statusEmoji = '⚠️📉';  // 7% 이상 폭락
-                       else if (absPercent >= 5) statusEmoji = '💥📉';  // 5% 이상 급락
-                       else if (absPercent >= 3) statusEmoji = '❄️🔻';  // 3% 이상 하락
-                       else if (absPercent >= 1) statusEmoji = '😰💧';  // 1% 이상 소폭하락
+                       if (absPercent >= 15) statusEmoji = '💀';      // 15% 이상 초대형 폭락
+                       else if (absPercent >= 10) statusEmoji = '💀'; // 10% 이상 대폭락
+                       else if (absPercent >= 7) statusEmoji = '⚠️';  // 7% 이상 폭락
+                       else if (absPercent >= 5) statusEmoji = '💥';  // 5% 이상 급락
+                       else if (absPercent >= 3) statusEmoji = '❄️';  // 3% 이상 하락
+                       else if (absPercent >= 1) statusEmoji = '😰';  // 1% 이상 소폭하락
                        else statusEmoji = '😔';                         // 1% 미만 미세하락
                    }
                }

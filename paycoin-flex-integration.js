@@ -8,24 +8,24 @@ async function sendPaycoinTechnicalAnalysisFlexMessage(alert, webhookUrl) {
     
     // 알림 타입별 색상 및 이모지 설정
     const alertStyles = {
-        volume_spike: { color: '#FF6B35', emoji: '🔥📈', bgColor: '#FFF5F3' },
+        volume_spike: { color: '#FF6B35', emoji: '🔥', bgColor: '#FFF5F3' },
         rsi_overbought: { color: '#FF4757', emoji: '🔴', bgColor: '#FFF1F2' },
-        rsi_oversold: { color: '#2ED573', emoji: '🟢💎', bgColor: '#F0FFF4' },
-        golden_cross: { color: '#FFA502', emoji: '🌟📈', bgColor: '#FFFBF0' },
-        dead_cross: { color: '#747D8C', emoji: '⚠️📉', bgColor: '#F8F9FA' },
+        rsi_oversold: { color: '#2ED573', emoji: '🟢', bgColor: '#F0FFF4' },
+        golden_cross: { color: '#FFA502', emoji: '🌟', bgColor: '#FFFBF0' },
+        dead_cross: { color: '#747D8C', emoji: '⚠️', bgColor: '#F8F9FA' },
         bb_upper_breakout: { color: '#3742FA', emoji: '🚀', bgColor: '#F0F2FF' },
         bb_lower_breakout: { color: '#2ED573', emoji: '💎', bgColor: '#F0FFF4' },
         overall_signal: { color: '#5F27CD', emoji: '🎯', bgColor: '#F8F5FF' },
         // 고급 기술지표
-        advanced_macd_golden_cross: { color: '#FFA502', emoji: '🌟📈', bgColor: '#FFFBF0' },
-        advanced_macd_dead_cross: { color: '#FF4757', emoji: '⚠️📉', bgColor: '#FFF1F2' },
-        advanced_stochastic_oversold: { color: '#2ED573', emoji: '🟢💎', bgColor: '#F0FFF4' },
-        advanced_stochastic_overbought: { color: '#FF4757', emoji: '🔴⚠️', bgColor: '#FFF1F2' },
+        advanced_macd_golden_cross: { color: '#FFA502', emoji: '🌟', bgColor: '#FFFBF0' },
+        advanced_macd_dead_cross: { color: '#FF4757', emoji: '⚠️', bgColor: '#FFF1F2' },
+        advanced_stochastic_oversold: { color: '#2ED573', emoji: '🟢', bgColor: '#F0FFF4' },
+        advanced_stochastic_overbought: { color: '#FF4757', emoji: '🔴', bgColor: '#FFF1F2' },
         advanced_fibonacci_level: { color: '#9C88FF', emoji: '🌀', bgColor: '#F5F3FF' },
-        advanced_ichimoku_bullish: { color: '#20BF6B', emoji: '☁️📈', bgColor: '#F0FFF4' },
-        advanced_ichimoku_bearish: { color: '#FF4757', emoji: '☁️📉', bgColor: '#FFF1F2' },
-        advanced_obv_bullish_divergence: { color: '#0FB9B1', emoji: '📊💡', bgColor: '#F0FFFE' },
-        advanced_obv_bearish_divergence: { color: '#F53B57', emoji: '📊⚠️', bgColor: '#FFF1F2' },
+        advanced_ichimoku_bullish: { color: '#20BF6B', emoji: '☁️', bgColor: '#F0FFF4' },
+        advanced_ichimoku_bearish: { color: '#FF4757', emoji: '☁️', bgColor: '#FFF1F2' },
+        advanced_obv_bullish_divergence: { color: '#0FB9B1', emoji: '💡', bgColor: '#F0FFFE' },
+        advanced_obv_bearish_divergence: { color: '#F53B57', emoji: '⚠️', bgColor: '#FFF1F2' },
         advanced_vwap_deviation: { color: '#3C40C6', emoji: '💰', bgColor: '#F0F2FF' }
     };
     
@@ -80,7 +80,7 @@ async function sendPaycoinTechnicalAnalysisFlexMessage(alert, webhookUrl) {
                 contents: [
                     {
                         type: "text",
-                        text: alert.title.replace(/^[🔥📈🟢💎🌟📈⚠️📉🚀💎🎯☁️🌀📊💰]\s*/, ''),
+                        text: alert.title.replace(/^[🔥🟢💎🌟⚠️🚀🎯☁️🌀📊💰🔴💡⚡❄️😰✨💀💥😔]+\s*/, ''),
                         weight: "bold",
                         size: "lg",
                         color: "#2C3E50",
