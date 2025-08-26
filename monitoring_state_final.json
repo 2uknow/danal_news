@@ -24,10 +24,6 @@
         119,
         119,
         119,
-        119,
-        119,
-        119,
-        119,
         120,
         120,
         120,
@@ -80,7 +76,11 @@
         119,
         119,
         119,
-        120
+        120,
+        119,
+        119,
+        119,
+        119
       ],
       "lastAlertPrice": 120,
       "lastReportPrice": 119,
@@ -90,7 +90,7 @@
       "openingPriceDate": "2025-08-26",
       "addedDate": "2025-08-18T00:11:54.016Z",
       "totalAlerts": 22,
-      "lastUpdate": "2025-08-26T22:37:01.810Z",
+      "lastUpdate": "2025-08-26T22:57:01.562Z",
       "lastTrendAlertPrice": 124,
       "trendAlertDirection": "up"
     },
@@ -165,7 +165,7 @@
       "openingPriceDate": "2025-08-26",
       "addedDate": "2025-08-18T00:11:54.016Z",
       "totalAlerts": 62,
-      "lastUpdate": "2025-08-26T22:37:02.943Z",
+      "lastUpdate": "2025-08-26T22:57:02.422Z",
       "lastTrendAlertPrice": 7720,
       "trendAlertDirection": "down"
     },
@@ -197,10 +197,6 @@
     },
     "비트코인": {
       "priceHistory": [
-        155672000,
-        155768000,
-        155768000,
-        155603000,
         155603000,
         155603000,
         155604000,
@@ -256,7 +252,11 @@
         156426000,
         156318000,
         156380000,
-        156372000
+        156372000,
+        156384000,
+        156384000,
+        156640000,
+        156640000
       ],
       "lastAlertPrice": 0,
       "lastReportPrice": 155572000,
@@ -266,15 +266,11 @@
       "openingPriceDate": "2025-08-26",
       "addedDate": "2025-08-18T00:11:54.017Z",
       "totalAlerts": 0,
-      "lastUpdate": "2025-08-26T22:37:03.824Z",
+      "lastUpdate": "2025-08-26T22:57:03.136Z",
       "lastTrendAlertPrice": 0
     },
     "이더리움": {
       "priceHistory": [
-        6416000,
-        6407000,
-        6405000,
-        6405000,
         6409000,
         6409000,
         6409000,
@@ -330,7 +326,11 @@
         6427000,
         6427000,
         6427000,
-        6416000
+        6416000,
+        6420000,
+        6426000,
+        6426000,
+        6430000
       ],
       "lastAlertPrice": 6392000,
       "lastReportPrice": 6391000,
@@ -340,16 +340,12 @@
       "openingPriceDate": "2025-08-26",
       "addedDate": "2025-08-18T00:11:54.017Z",
       "totalAlerts": 8,
-      "lastUpdate": "2025-08-26T22:37:04.651Z",
+      "lastUpdate": "2025-08-26T22:57:03.867Z",
       "lastTrendAlertPrice": 6392000,
       "trendAlertDirection": "up"
     },
     "리플": {
       "priceHistory": [
-        4226,
-        4221,
-        4221,
-        4219,
         4219,
         4219,
         4225,
@@ -405,6 +401,10 @@
         4216,
         4216,
         4213,
+        4213,
+        4212,
+        4212,
+        4213,
         4213
       ],
       "lastAlertPrice": 4217,
@@ -415,14 +415,14 @@
       "openingPriceDate": "2025-08-26",
       "addedDate": "2025-08-18T00:11:54.017Z",
       "totalAlerts": 4,
-      "lastUpdate": "2025-08-26T22:37:05.418Z",
+      "lastUpdate": "2025-08-26T22:57:04.530Z",
       "lastTrendAlertPrice": 4217,
       "trendAlertDirection": "up"
     }
   },
-  "lastPeriodicReportTime": 1756244400730,
+  "lastPeriodicReportTime": 1756248839301,
   "newsSearchState": {
     "currentAssetIndex": 0,
-    "lastSearchTime": 1756247820963
+    "lastSearchTime": 1756249020697
   }
 }

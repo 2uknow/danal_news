@@ -156,16 +156,16 @@ class PaycoinAlertSystem {
                 const technicalAnalysis = await this.technicalIndicators.performFullAnalysis();
                 
                 if (technicalAnalysis) {
-                    console.log(`📊 현재 RSI: ${technicalAnalysis.rsi?.toFixed(2) || 'N/A'}`);
-                    console.log(`📊 이동평균선: MA5(${technicalAnalysis.movingAverages?.ma5?.toFixed(0) || 'N/A'}) MA20(${technicalAnalysis.movingAverages?.ma20?.toFixed(0) || 'N/A'})`);
-                    console.log(`📊 볼린저밴드: 상단(${technicalAnalysis.bollingerBands?.upper?.toFixed(0) || 'N/A'}) 하단(${technicalAnalysis.bollingerBands?.lower?.toFixed(0) || 'N/A'})`);
+                    console.log(`📊 현재 RSI: ${typeof technicalAnalysis.rsi === 'number' ? technicalAnalysis.rsi.toFixed(2) : 'N/A'}`);
+                    console.log(`📊 이동평균선: MA5(${typeof technicalAnalysis.movingAverages?.ma5 === 'number' ? technicalAnalysis.movingAverages.ma5.toFixed(0) : 'N/A'}) MA20(${typeof technicalAnalysis.movingAverages?.ma20 === 'number' ? technicalAnalysis.movingAverages.ma20.toFixed(0) : 'N/A'})`);
+                    console.log(`📊 볼린저밴드: 상단(${typeof technicalAnalysis.bollingerBands?.upper === 'number' ? technicalAnalysis.bollingerBands.upper.toFixed(0) : 'N/A'}) 하단(${typeof technicalAnalysis.bollingerBands?.lower === 'number' ? technicalAnalysis.bollingerBands.lower.toFixed(0) : 'N/A'})`);
                     
                     // RSI 알림
-                    const rsiAlert = this.checkRSIAlert(technicalAnalysis.rsi, now);
+                    const rsiAlert = this.checkRSIAlert(technicalAnalysis, now);
                     if (rsiAlert) {
                         alerts.push(rsiAlert);
                         this.lastAlerts.rsi = now;
-                        console.log(`🔴 RSI 기술적 분석 알림 생성! (RSI: ${technicalAnalysis.rsi?.toFixed(2)})`);
+                        console.log(`🔴 RSI 기술적 분석 알림 생성! (RSI: ${typeof technicalAnalysis.rsi === 'number' ? technicalAnalysis.rsi.toFixed(2) : 'N/A'})`);
                     } else {
                         console.log('📊 RSI: 정상 범위 내 (30-70)');
                     }
@@ -176,7 +176,9 @@ class PaycoinAlertSystem {
                         alerts.push(maAlert);
                         this.lastAlerts.ma = now;
                         const crossType = maAlert.type.includes('golden') ? '골든크로스' : '데드크로스';
-                        console.log(`🌟 이동평균 ${crossType} 알림 생성! (MA5: ${technicalAnalysis.movingAverages?.ma5?.toFixed(0)}, MA20: ${technicalAnalysis.movingAverages?.ma20?.toFixed(0)})`);
+                        const ma5 = typeof technicalAnalysis.movingAverages?.ma5 === 'number' ? technicalAnalysis.movingAverages.ma5.toFixed(0) : 'N/A';
+                        const ma20 = typeof technicalAnalysis.movingAverages?.ma20 === 'number' ? technicalAnalysis.movingAverages.ma20.toFixed(0) : 'N/A';
+                        console.log(`🌟 이동평균 ${crossType} 알림 생성! (MA5: ${ma5}, MA20: ${ma20})`);
                     } else {
                         console.log('📊 이동평균선: 정상 상태 (크로스오버 없음)');
                     }
@@ -187,7 +189,8 @@ class PaycoinAlertSystem {
                         alerts.push(bbAlert);
                         this.lastAlerts.bb = now;
                         const bandType = bbAlert.type.includes('upper') ? '상단 돌파' : '하단 이탈';
-                        console.log(`🚀 볼린저밴드 ${bandType} 알림 생성! (현재가: ${technicalAnalysis.currentPrice?.toFixed(0) || 'N/A'})`);
+                        const currentPrice = typeof technicalAnalysis.currentPrice === 'number' ? technicalAnalysis.currentPrice.toFixed(0) : 'N/A';
+                        console.log(`🚀 볼린저밴드 ${bandType} 알림 생성! (현재가: ${currentPrice})`);
                     } else {
                         console.log('📊 볼린저밴드: 정상 범위 내');
                     }
@@ -198,7 +201,8 @@ class PaycoinAlertSystem {
                         if (overallAlert) {
                             alerts.push(overallAlert);
                             this.lastAlerts.overall = now;
-                            console.log(`🎯 종합 기술적 분석 알림 생성! (신호: ${technicalAnalysis.overallSignal?.sentiment || 'N/A'})`);
+                            const sentiment = technicalAnalysis.overallSignal?.sentiment || technicalAnalysis.overallSignal || 'N/A';
+                            console.log(`🎯 종합 기술적 분석 알림 생성! (신호: ${sentiment})`);
                         } else {
                             console.log('📊 종합 분석: 중립적 신호');
                         }
@@ -218,8 +222,10 @@ class PaycoinAlertSystem {
                 
                 if (advancedAnalysis && advancedAnalysis.advanced) {
                     console.log('📊 MACD, 스토캐스틱, 피보나치, 일목균형표, OBV, VWAP 분석 완료');
-                    console.log(`📊 고급 신호 강도: ${advancedAnalysis.advanced.signalStrength || 'N/A'}`);
-                    console.log(`📊 고급 신뢰도: ${advancedAnalysis.advanced.confidence || 'N/A'}`);
+                    const signalStrength = advancedAnalysis.advanced?.signalStrength || 'N/A';
+                    const confidence = advancedAnalysis.advanced?.confidence || 'N/A';
+                    console.log(`📊 고급 신호 강도: ${signalStrength}`);
+                    console.log(`📊 고급 신뢰도: ${confidence}`);
                     
                     const advancedAlerts = this.checkAdvancedIndicatorAlerts(advancedAnalysis.advanced, now);
                     if (advancedAlerts.length > 0) {
@@ -296,11 +302,19 @@ class PaycoinAlertSystem {
     }
     
     // 📊 RSI 알림 체크
-    checkRSIAlert(rsiData, now) {
-        if (!rsiData.rsi || rsiData.signal === 'insufficient_data') return null;
+    checkRSIAlert(technicalAnalysis, now) {
+        if (!technicalAnalysis || typeof technicalAnalysis.rsi !== 'number') return null;
         
-        const { rsi, signal } = rsiData;
+        const rsi = technicalAnalysis.rsi;
         const rsiState = this.lastIndicatorStates.rsi;
+        
+        // RSI 신호 판단
+        let signal = 'neutral';
+        if (rsi >= this.alertConfig.technical.rsi.overbought) {
+            signal = 'overbought';
+        } else if (rsi <= this.alertConfig.technical.rsi.oversold) {
+            signal = 'oversold';
+        }
         
         // 중복 방지: 같은 신호이고 RSI 값이 크게 변하지 않았으면 패스
         const rsiChangeThreshold = 5; // RSI 5 이상 변화 시에만 알림
