@@ -734,15 +734,15 @@ class PaycoinAlertSystem {
                 const fib = advancedData.fibonacci;
                 const fibState = this.advancedAlertStates.fibonacci;
                 
-                // 레벨 근접 체크
-                if (fib.nearestLevel && Math.abs(fib.fibonacci.currentPrice - fib.nearestLevel.price) / fib.nearestLevel.price < 0.02) {
+                // 레벨 근접 체크 (더 엄격한 기준 적용)
+                if (fib.nearestLevel && Math.abs(fib.fibonacci.currentPrice - fib.nearestLevel.price) / fib.nearestLevel.price < 0.015) {
                     const levelType = ['strong_support', 'support'].includes(fib.signal) ? '지지' : 
                                      ['strong_resistance', 'resistance'].includes(fib.signal) ? '저항' : '주요';
                     
-                    // 새로운 레벨이거나 가격이 크게 변했을 때만 알림
+                    // 새로운 레벨이거나 가격이 크게 변했을 때만 알림 (더 엄격한 기준)
                     const isNewLevel = fibState.lastLevel !== fib.nearestLevel.name;
-                    const priceChanged = !fibState.lastPrice || Math.abs(fib.fibonacci.currentPrice - fibState.lastPrice) / fibState.lastPrice > 0.01;
-                    const cooldownPassed = now - fibState.lastAlert > 60 * 60 * 1000; // 1시간 쿨다운
+                    const priceChanged = !fibState.lastPrice || Math.abs(fib.fibonacci.currentPrice - fibState.lastPrice) / fibState.lastPrice > 0.025; // 2.5% 변화
+                    const cooldownPassed = now - fibState.lastAlert > 4 * 60 * 60 * 1000; // 4시간 쿨다운
                     
                     if ((isNewLevel || priceChanged) && cooldownPassed) {
                         alerts.push(this.createAdvancedAlert('fibonacci_level', {
