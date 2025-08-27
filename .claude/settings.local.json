@@ -7,7 +7,14 @@
       "Bash(curl:*)",
       "Bash(sed:*)",
       "Bash(pm2 logs:*)",
-      "Bash(timeout:*)"
+      "Bash(timeout:*)",
+      "Bash(pm2 status:*)",
+      "Bash(pm2 show:*)",
+      "Bash(pm2 reload:*)",
+      "Bash(where pm2)",
+      "Bash(wmic process where \"name='node.exe'\" get commandline,processid:*)",
+      "Bash(dir C:Users2uknow.pm2pids)",
+      "Read(C:\\Users\\2uknow\\.pm2\\pids/**)"
     ],
     "deny": [],
     "ask": [],

@@ -110,8 +110,8 @@ const TRADING_SCHEDULE = {
         start: 900,           // 09:00
         end: 1530            // 15:30
     },
-    nxtHours: {              // NXT 시간
-        start: 800,           // 08:00  
+    nxtHours: {              // NXT 시간 (정규장 이후만)
+        start: 1600,          // 16:00 (정규장 종료 후)  
         end: 2000            // 20:00
     }
 };
@@ -781,19 +781,37 @@ function parseStockPrice($, asset, selectors) {
         }
     });
     
-    // 🎯 시간대에 따른 가격 선택
-    if (isRegularHours && krxPrice) {
-        console.log(`   🏛️ 정규장 시간 - KRX 가격 사용: ${krxPrice.toLocaleString()}원`);
-        return krxPrice;
-    } else if (isNxtHours && nxtPrice) {
-        console.log(`   🌙 NXT 시간 - NXT 가격 사용: ${nxtPrice.toLocaleString()}원`);
-        return nxtPrice;
-    } else if (krxPrice) {
-        console.log(`   🏛️ 기본값 - KRX 가격 사용: ${krxPrice.toLocaleString()}원`);
-        return krxPrice;
-    } else if (nxtPrice) {
-        console.log(`   🌙 대체값 - NXT 가격 사용: ${nxtPrice.toLocaleString()}원`);
-        return nxtPrice;
+    // 🎯 수동 모드 체크 후 가격 선택
+    if (!TRADING_SCHEDULE.autoMode) {
+        // 🔧 수동 모드: 강제 설정 사용
+        if (TRADING_SCHEDULE.forceMode === 'nxt' && nxtPrice) {
+            console.log(`   🔧 수동 모드 - NXT 강제 사용: ${nxtPrice.toLocaleString()}원`);
+            return nxtPrice;
+        } else if (TRADING_SCHEDULE.forceMode === 'krx' && krxPrice) {
+            console.log(`   🔧 수동 모드 - KRX 강제 사용: ${krxPrice.toLocaleString()}원`);
+            return krxPrice;
+        } else if (krxPrice) {
+            console.log(`   🔧 수동 모드 - KRX 기본값 사용: ${krxPrice.toLocaleString()}원`);
+            return krxPrice;
+        } else if (nxtPrice) {
+            console.log(`   🔧 수동 모드 - NXT 대체값 사용: ${nxtPrice.toLocaleString()}원`);
+            return nxtPrice;
+        }
+    } else {
+        // 🕐 자동 모드: 시간대에 따른 가격 선택
+        if (isRegularHours && krxPrice) {
+            console.log(`   🏛️ 정규장 시간 - KRX 가격 사용: ${krxPrice.toLocaleString()}원`);
+            return krxPrice;
+        } else if (isNxtHours && nxtPrice) {
+            console.log(`   🌙 NXT 시간 - NXT 가격 사용: ${nxtPrice.toLocaleString()}원`);
+            return nxtPrice;
+        } else if (krxPrice) {
+            console.log(`   🏛️ 기본값 - KRX 가격 사용: ${krxPrice.toLocaleString()}원`);
+            return krxPrice;
+        } else if (nxtPrice) {
+            console.log(`   🌙 대체값 - NXT 가격 사용: ${nxtPrice.toLocaleString()}원`);
+            return nxtPrice;
+        }
     }
     
     // 🎯 방법 2: 기존 선택자들로 폴백
