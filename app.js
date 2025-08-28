@@ -1290,6 +1290,10 @@ function analyzeNewsSentiment(title, description = '') {
         '폰지': 5, '러그풀': 5, '코인사기': 5, '가상화폐규제': 4,
         '채굴금지': 4, '거래금지': 4, '암호화폐금지': 4,
         
+        // 🚨 사기/범죄 관련 악재 (가중치 4-5) 
+        '보이스피싱': 5, '전화사기': 5, '투자사기': 5, '피싱': 4,
+        '사기': 4, '피해': 3, '범죄': 4, '불법': 4, '악용': 3, '도용': 4,
+        
         // 💳 핀테크 규제 악재 (가중치 3-4)
         '핀테크규제': 4, '금융규제': 4, '결제규제': 3, '라이선스취소': 5,
         '영업정지': 5, '업무개선명령': 4, '과징금': 3, '제재조치': 4
@@ -1461,6 +1465,38 @@ function analyzeNewsSentiment(title, description = '') {
                 sentence.includes('전망') || sentence.includes('예측')) {
                 sentenceWeight *= 0.7;
                 console.log(`     → 조건부/예측 문장으로 가중치 감소: ${sentenceWeight.toFixed(1)}`);
+            }
+            
+            // 🚨 부정적 맥락에서 증가 표현 감지 (가중치 전환)
+            const hasNegativeContext = sentence.includes('보이스피싱') || sentence.includes('사기') || 
+                                     sentence.includes('피해') || sentence.includes('범죄') || 
+                                     sentence.includes('악용') || sentence.includes('불법') ||
+                                     sentence.includes('해킹') || sentence.includes('도용');
+                                     
+            if (hasNegativeContext) {
+                // 부정적 맥락에서 "증가/폭증/급증" 표현은 더 부정적으로 해석
+                const increaseWords = ['증가', '폭증', '급증', '늘어나', '확산', '번지'];
+                let contextualNegativeBonus = 0;
+                
+                increaseWords.forEach(word => {
+                    if (sentence.includes(word)) {
+                        contextualNegativeBonus += 3; // 부정 맥락에서 증가 = 더 나쁨
+                        console.log(`     → 부정적 맥락에서 "${word}" 감지: 부정 점수 +3`);
+                    }
+                });
+                
+                // 부정적 맥락에서 수치 증가 표현 (2배, 6배, 10배 등)
+                const numberIncreaseMatch = sentence.match(/(\d+)배/);
+                if (numberIncreaseMatch) {
+                    const multiplier = parseInt(numberIncreaseMatch[1]);
+                    if (multiplier >= 2) {
+                        const bonus = Math.min(multiplier, 10); // 최대 10점
+                        contextualNegativeBonus += bonus;
+                        console.log(`     → 부정적 맥락에서 "${multiplier}배" 감지: 부정 점수 +${bonus}`);
+                    }
+                }
+                
+                sentenceNegative.score += contextualNegativeBonus;
             }
             
             // 감정이 혼재된 경우 처리
