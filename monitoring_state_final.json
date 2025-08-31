@@ -48,6 +48,22 @@
       "time": "24시간 전",
       "asset": "비트코인",
       "sentAt": "2025-08-31T04:46:01.254Z"
+    },
+    {
+      "title": "엘살바도르, 비트코인 보유량 분할…양자 컴퓨팅 위협 대비",
+      "link": "http://www.g-enews.com/ko-kr/news/article/news_all/202508311317462779e250e8e188_1/article.html",
+      "press": "언론사 미상",
+      "time": "시간 미상",
+      "asset": "비트코인",
+      "sentAt": "2025-08-31T04:56:12.831Z"
+    },
+    {
+      "title": "다날, 엑셀라와 협력해 글로벌 스테이블코인 결제 생태계 구축",
+      "link": "https://www.job-post.co.kr/news/articleView.html?idxno=173587",
+      "press": "언론사 미상",
+      "time": "시간 미상",
+      "asset": "다날",
+      "sentAt": "2025-08-31T04:56:55.391Z"
     }
   ],
   "assetStates": {
@@ -58,9 +74,6 @@
         120,
         120,
         120,
-        120,
-        120,
-        120,
         121,
         121,
         121,
@@ -111,6 +124,9 @@
         139,
         140,
         140,
+        139,
+        139,
+        139,
         139,
         139
       ],
@@ -122,7 +138,7 @@
       "openingPriceDate": "2025-08-31",
       "addedDate": "2025-08-18T00:11:54.016Z",
       "totalAlerts": 25,
-      "lastUpdate": "2025-08-31T04:51:01.404Z",
+      "lastUpdate": "2025-08-31T04:57:00.393Z",
       "lastTrendAlertPrice": 139,
       "trendAlertDirection": "up"
     },
@@ -229,9 +245,6 @@
     },
     "비트코인": {
       "priceHistory": [
-        155881000,
-        155843000,
-        155852000,
         155900000,
         155900000,
         155880000,
@@ -288,7 +301,10 @@
         151620000,
         151670000,
         151670000,
-        151594000
+        151594000,
+        151507000,
+        151499000,
+        151499000
       ],
       "lastAlertPrice": 151527000,
       "lastReportPrice": 155549000,
@@ -298,15 +314,12 @@
       "openingPriceDate": "2025-08-31",
       "addedDate": "2025-08-18T00:11:54.017Z",
       "totalAlerts": 1,
-      "lastUpdate": "2025-08-31T04:51:01.853Z",
+      "lastUpdate": "2025-08-31T04:57:00.829Z",
       "lastTrendAlertPrice": 151527000,
       "trendAlertDirection": "down"
     },
     "이더리움": {
       "priceHistory": [
-        6338000,
-        6338000,
-        6334000,
         6334000,
         6333000,
         6331000,
@@ -363,7 +376,10 @@
         6226000,
         6221000,
         6228000,
-        6221000
+        6221000,
+        6216000,
+        6216000,
+        6216000
       ],
       "lastAlertPrice": 6392000,
       "lastReportPrice": 6289000,
@@ -373,15 +389,12 @@
       "openingPriceDate": "2025-08-31",
       "addedDate": "2025-08-18T00:11:54.017Z",
       "totalAlerts": 8,
-      "lastUpdate": "2025-08-31T04:51:02.247Z",
+      "lastUpdate": "2025-08-31T04:57:01.222Z",
       "lastTrendAlertPrice": 6392000,
       "trendAlertDirection": "up"
     },
     "리플": {
       "priceHistory": [
-        4166,
-        4165,
-        4165,
         4164,
         4164,
         4162,
@@ -438,7 +451,10 @@
         3963,
         3961,
         3963,
-        3963
+        3963,
+        3958,
+        3958,
+        3958
       ],
       "lastAlertPrice": 3959,
       "lastReportPrice": 4148,
@@ -448,14 +464,14 @@
       "openingPriceDate": "2025-08-31",
       "addedDate": "2025-08-18T00:11:54.017Z",
       "totalAlerts": 6,
-      "lastUpdate": "2025-08-31T04:51:02.752Z",
+      "lastUpdate": "2025-08-31T04:57:01.587Z",
       "lastTrendAlertPrice": 3959,
       "trendAlertDirection": "down"
     }
   },
   "lastPeriodicReportTime": 1756615545745,
   "newsSearchState": {
-    "currentAssetIndex": 1,
-    "lastSearchTime": 1756615860925
+    "currentAssetIndex": 0,
+    "lastSearchTime": 1756616220031
   }
 }

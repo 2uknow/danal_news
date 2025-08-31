@@ -1971,9 +1971,16 @@ async function checkNewsWithRotatingAssets(currentState) {
     const nextAsset = newsEnabledAssets[nextAssetIndex];
     console.log(`➡️ 다음 뉴스 검색 예정: ${nextAsset.name} (1분 후)`);
     
-    // 🎯 새로운 네이버 뉴스 검색 URL (ssc=tab.news.all 방식)
-    const searchUrl = `https://search.naver.com/search.naver?ssc=tab.news.all&where=news&sm=tab_jum&query=${encodeURIComponent(searchQuery)}`;
-    //const searchUrl = `https://search.naver.com/search.naver?ssc=tab.news.all&query=${encodeURIComponent(searchQuery)}&sm=tab_opt&sort=0&photo=0&field=0&pd=0&ds=2025.08.31&de=2025.08.31&docid=&related=0&mynews=0&office_type=0&office_section_code=0&news_office_checked=&nso=so%3Ar%2Cp%3Aall&is_sug_officeid=0&office_category=0&service_area=0`
+    // 🎯 새로운 네이버 뉴스 검색 URL (최신순 정렬)
+    //const searchUrl = `https://search.naver.com/search.naver?ssc=tab.news.all&where=news&sm=tab_jum&query=${encodeURIComponent(searchQuery)}`;  // 기본 검색
+    //const searchUrl = `https://search.naver.com/search.naver?ssc=tab.news.all&query=${encodeURIComponent(searchQuery)}&sm=tab_opt&sort=0&photo=0&field=0&pd=0&ds=2025.08.31&de=2025.08.31&docid=&related=0&mynews=0&office_type=0&office_section_code=0&news_office_checked=&nso=so%3Ar%2Cp%3Aall&is_sug_officeid=0&office_category=0&service_area=0`  // 정확도순
+    // 동적 날짜 생성 (오늘 날짜)
+    const today = new Date();
+    const todayStr = today.getFullYear() + '.' + 
+                     String(today.getMonth() + 1).padStart(2, '0') + '.' + 
+                     String(today.getDate()).padStart(2, '0');
+    
+    const searchUrl = `https://search.naver.com/search.naver?ssc=tab.news.all&query=${encodeURIComponent(searchQuery)}&sm=tab_opt&sort=1&photo=0&field=0&pd=-1&ds=${todayStr}&de=${todayStr}&docid=&related=0&mynews=0&office_type=0&office_section_code=0&news_office_checked=&nso=so%3Add%2Cp%3Aall&is_sug_officeid=0&office_category=0&service_area=0`  // 최신순 (오늘 날짜 자동)
     console.log(`🌐 검색 URL: ${searchUrl}`);
     
     try {
