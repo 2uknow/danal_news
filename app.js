@@ -1206,25 +1206,25 @@ function analyzeNewsSentiment(title, description = '') {
     // 문장 단위 분리 (마침표, 느낌표, 물음표, 쉼표 등으로 구분)
     const sentences = text.split(/[.!?;,\n]/).filter(s => s.trim().length > 0);
     
-    // 호재 키워드 (긍정) - 가중치 시스템
+    // 🔥 강화된 금융 전문용어 키워드 사전 - 호재 (긍정)
     const positiveKeywords = {
         // 초강력 상승 (가중치 5)
-        '폭등': 5, '급등': 4, '치솟': 4, '상한가': 5, '신고가': 4,
+        '폭등': 5, '급등': 4, '치솟': 4, '상한가': 5, '신고가': 4, '최고가': 4,
         
-        // 강력 상승 (가중치 3)
-        '급상승': 3, '돌파': 3, '최고가': 3, '뛰어올라': 3, '강세': 3,
+        // 강력 상승 (가중치 3) 
+        '급상승': 3, '돌파': 3, '뛰어올라': 3, '강세': 3, '상승세': 3, '대폭상승': 3,
         
         // 일반 상승 (가중치 2)
-        '상승': 2, '오름': 2, '증가': 2, '고점': 2,
+        '상승': 2, '오름': 2, '증가': 2, '호재': 2, '플러스': 2, '상승폭': 2, '상승률': 2,
+        '개선': 2, '회복': 2, '반등': 2, '성장': 2,
+        
+        // 비즈니스 긍정 (가중치 2-3)
+        '협력': 2, '파트너': 2, '제휴': 2, '계약': 2, '선정': 3, '구축': 2, '확장': 2,
+        '런칭': 2, '출시': 2, '도입': 2, '투자': 2, '수주': 3,
         
         // 강력 호재 (가중치 4-5)
         '흑자전환': 5, '실적개선': 4, '투자유치': 4, '펀딩': 4,
         '신사업': 3, '업계최초': 4, '1위': 3,
-        
-        // 일반 호재 (가중치 2-3)
-        '호재': 3, '좋은소식': 2, '긍정적': 2, '성공': 3, '성과': 2,
-        '매출증가': 3, '이익증가': 3, '수주': 3, '계약': 2, '협약': 2,
-        '출시': 2, '론칭': 2, '확장': 2, '성장': 2, '개발완료': 2,
         
         // 시장 긍정 (가중치 2-3)
         '관심집중': 2, '주목받': 2, '기대감': 2, '전망밝': 3, '낙관': 2,
@@ -1251,25 +1251,24 @@ function analyzeNewsSentiment(title, description = '') {
         '금융혁신': 4, '핀테크허브': 3, '스마트뱅킹': 3, '오픈뱅킹': 3
     };
     
-    // 악재 키워드 (부정) - 가중치 시스템
+    // 🔥 강화된 금융 전문용어 키워드 사전 - 악재 (부정)
     const negativeKeywords = {
         // 초강력 하락 (가중치 5)
-        '폭락': 5, '급락': 4, '붕괴': 5, '하한가': 5, '신저가': 4,
+        '폭락': 5, '급락': 4, '추락': 4, '하한가': 5, '최저가': 4,
         
         // 강력 하락 (가중치 3)
-        '급하락': 3, '추락': 3, '최저가': 3, '약세': 3, '하락세': 3,
+        '급하락': 3, '붕괴': 3, '급반락': 3, '약세': 3, '하락세': 3, '대폭하락': 3,
         
         // 일반 하락 (가중치 2)
-        '하락': 2, '떨어져': 2, '감소': 2, '저점': 2,
+        '하락': 2, '내림': 2, '내림세': 2, '감소': 2, '악재': 2, '마이너스': 2, 
+        '하락폭': 2, '하락률': 2, '떨어짐': 2, '하회': 2,
+        
+        // 부정적 사건 (가중치 2-3)
+        '사기': 3, '피싱': 3, '범죄': 3, '해킹': 3, '위험': 2, '우려': 2, '경고': 2,
+        '제재': 3, '규제': 2, '금지': 3, '중단': 2, '취소': 2,
         
         // 강력 악재 (가중치 4-5)
-        '실적악화': 5, '적자': 4, '손실': 3, '중단': 4, '취소': 4,
-        '위기': 4, '충격': 4, '패닉': 5, '투매': 4,
-        
-        // 일반 악재 (가중치 2-3)
-        '악재': 3, '나쁜소식': 2, '부정적': 2, '실패': 3,
-        '매출감소': 3, '이익감소': 3, '연기': 2, '지연': 2,
-        '문제': 2, '리스크': 2, '우려': 2, '불안': 2,
+        '실적악화': 5, '적자': 4, '손실': 3, '위기': 4, '충격': 4, '패닉': 5, '투매': 4,
         
         // 시장 부정 (가중치 2-3)
         '매도': 2, '공포': 3, '불신': 2, '의구심': 2,
@@ -1543,6 +1542,81 @@ function analyzeNewsSentiment(title, description = '') {
     negativeScore = contextualResult.negativeScore;
     neutralScore = contextualResult.neutralScore;
     
+    // 🔥 맥락 기반 감정 보정 (부정적 맥락에서 증가 표현 처리)
+    function applyContextualCorrection() {
+        const fullText = (title + ' ' + description).toLowerCase();
+        
+        // 부정적 맥락 키워드들
+        const negativeContexts = [
+            '범죄', '사기', '피싱', '해킹', '위반', '불법', '악용', '피해', 
+            '문제', '우려', '위험', '경고', '제재', '처벌', '소송', '분쟁',
+            '손실', '적자', '실적악화', '위기', '충격', '패닉'
+        ];
+        
+        // 증가 표현 키워드들  
+        const increaseWords = [
+            '증가', '상승', '급증', '폭증', '늘어', '확산', '번져', '급등',
+            '치솟', '배', '증가율', '상승률', '늘어나', '커지'
+        ];
+        
+        // 부정적 맥락이 있는지 확인
+        let hasNegativeContext = false;
+        let foundNegativeContext = '';
+        
+        for (const negContext of negativeContexts) {
+            if (fullText.includes(negContext)) {
+                hasNegativeContext = true;
+                foundNegativeContext = negContext;
+                break;
+            }
+        }
+        
+        // 증가 표현이 있는지 확인
+        let hasIncreaseTerm = false;
+        let foundIncreaseTerm = '';
+        
+        for (const increaseTerm of increaseWords) {
+            if (fullText.includes(increaseTerm)) {
+                hasIncreaseTerm = true;
+                foundIncreaseTerm = increaseTerm;
+                break;
+            }
+        }
+        
+        // 부정적 맥락 + 증가 표현 = 부정으로 보정
+        if (hasNegativeContext && hasIncreaseTerm) {
+            console.log(`   🔧 맥락 보정: "${foundNegativeContext}" + "${foundIncreaseTerm}" → 부정으로 변경`);
+            
+            // 긍정 점수를 부정으로 이동
+            if (positiveScore > 0) {
+                const transferScore = positiveScore;
+                positiveScore = 0;
+                negativeScore += transferScore + 2; // 추가 부정 점수
+                
+                foundNegative.push(`맥락보정(${foundNegativeContext}+${foundIncreaseTerm}=+${transferScore + 2}점)`);
+                console.log(`   🔄 점수 이동: 긍정 ${transferScore}점 → 부정으로 전환 (+2 보너스)`);
+            } else {
+                // 긍정 점수가 없어도 부정 점수 추가
+                negativeScore += 2;
+                foundNegative.push(`맥락부정(${foundNegativeContext}+${foundIncreaseTerm}=+2점)`);
+                console.log(`   ➕ 맥락 부정 점수 추가: +2점`);
+            }
+        }
+        
+        return {
+            correctedPositive: positiveScore,
+            correctedNegative: negativeScore,
+            correctedNeutral: neutralScore,
+            contextCorrection: hasNegativeContext && hasIncreaseTerm ? `${foundNegativeContext}+${foundIncreaseTerm}` : null
+        };
+    }
+    
+    // 맥락 보정 적용
+    const correction = applyContextualCorrection();
+    positiveScore = correction.correctedPositive;
+    negativeScore = correction.correctedNegative;
+    neutralScore = correction.correctedNeutral;
+    
     // 발견된 키워드 목록 (문장 번호 포함)
     foundPositive = contextualResult.foundPositive;
     foundNegative = contextualResult.foundNegative;
@@ -1559,7 +1633,11 @@ function analyzeNewsSentiment(title, description = '') {
     } else if (positiveScore > negativeScore) {
         const ratio = positiveScore / (positiveScore + negativeScore);
         sentiment = 'positive';
-        confidence = Math.min(0.9, 0.5 + ratio * 0.4); // 0.5~0.9
+        
+        // 🔧 개선된 신뢰도 계산: 실제 점수 강도와 비율 고려
+        const scoreStrength = Math.min(positiveScore, 5) / 5; // 0~1 (최대 5점 기준)
+        const dominanceRatio = (positiveScore - negativeScore) / (positiveScore + negativeScore); // 우세도
+        confidence = Math.min(0.85, 0.3 + scoreStrength * 0.4 + dominanceRatio * 0.15); // 0.3~0.85
         
         if (positiveScore >= 3) emoji = '🚀'; // 강한 호재
         else if (positiveScore >= 2) emoji = '📈'; // 호재  
@@ -1567,7 +1645,11 @@ function analyzeNewsSentiment(title, description = '') {
     } else if (negativeScore > positiveScore) {
         const ratio = negativeScore / (positiveScore + negativeScore);
         sentiment = 'negative';
-        confidence = Math.min(0.9, 0.5 + ratio * 0.4); // 0.5~0.9
+        
+        // 🔧 개선된 신뢰도 계산: 실제 점수 강도와 비율 고려
+        const scoreStrength = Math.min(negativeScore, 5) / 5; // 0~1 (최대 5점 기준)
+        const dominanceRatio = (negativeScore - positiveScore) / (positiveScore + negativeScore); // 우세도
+        confidence = Math.min(0.85, 0.3 + scoreStrength * 0.4 + dominanceRatio * 0.15); // 0.3~0.85
         
         if (negativeScore >= 3) emoji = '💀'; // 강한 악재
         else if (negativeScore >= 2) emoji = '📉'; // 악재
