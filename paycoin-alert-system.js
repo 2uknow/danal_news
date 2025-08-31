@@ -66,7 +66,8 @@ class PaycoinAlertSystem {
                     cooldownHours: 6           // 6시간 쿨다운
                 },
                 vwap: {
-                    deviationAlert: true      // VWAP 이탈
+                    deviationAlert: true,     // VWAP 이탈
+                    cooldownHours: 3          // 3시간 쿨다운 (VWAP 알림 빈도 감소)
                 },
                 cooldown: 45 * 60 * 1000     // 45분 쿨다운
             },
@@ -909,12 +910,26 @@ class PaycoinAlertSystem {
                 }
             }
             
-            // VWAP 편차 알림
+            // VWAP 편차 알림 (쿨다운 적용)
             if (this.alertConfig.advanced.vwap.deviationAlert && advancedData.vwap) {
                 const vwap = advancedData.vwap;
-                if (Math.abs(vwap.deviation) > 3) {
+                const vwapState = this.advancedAlertStates.vwap;
+                
+                // VWAP 3시간 쿨다운 적용
+                const vwapCooldown = this.alertConfig.advanced.vwap.cooldownHours * 60 * 60 * 1000;
+                const canAlert = now - vwapState.lastAlert > vwapCooldown;
+                const isSignificantDeviation = Math.abs(vwap.deviation) > 3;
+                
+                console.log(`📊 VWAP 편차 체크: 편차=${vwap.deviation.toFixed(1)}%, 쿨다운=${canAlert}, 유의미=${isSignificantDeviation}`);
+                
+                if (canAlert && isSignificantDeviation) {
                     const direction = vwap.deviation > 0 ? '상회' : '하회';
                     const emoji = vwap.deviation > 0 ? '🚀' : '📉';
+                    
+                    // VWAP 상태 업데이트
+                    vwapState.lastDeviation = vwap.deviation;
+                    vwapState.lastAlert = now;
+                    
                     alerts.push(this.createAdvancedAlert('vwap_deviation', {
                         title: `${emoji} 페이코인 VWAP 큰 편차 발생!`,
                         message: [
@@ -935,6 +950,9 @@ class PaycoinAlertSystem {
                         level: vwap.deviation > 5 ? 'high' : 'medium',
                         data: { vwap }
                     }));
+                    
+                    // 상태 저장
+                    this.saveAlertStates();
                 }
             }
             

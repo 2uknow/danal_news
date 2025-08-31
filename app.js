@@ -40,7 +40,7 @@ const ASSETS_TO_WATCH = [
         spikeThreshold: 0.9,      // 급등락 임계값
         trendThreshold: 1.8,      // 추세 이탈 임계값
         enabled: true,            // 가격 모니터링 활성화/비활성화
-        newsEnabled: false         // 🔥 뉴스 검색 활성화/비활성화
+        newsEnabled: true         // 🔥 뉴스 검색 활성화/비활성화
     },
     { 
         name: '다날',       

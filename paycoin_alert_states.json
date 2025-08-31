@@ -8,14 +8,14 @@
     "lastAlert": 0
   },
   "fibonacci": {
-    "lastLevel": "61.8%",
-    "lastPrice": 120,
-    "lastAlert": 1756334931272
+    "lastLevel": "50.0%",
+    "lastPrice": 148,
+    "lastAlert": 1756652411089
   },
   "ichimoku": {
-    "lastSignal": "bearish",
-    "lastCloudColor": "bearish",
-    "lastAlert": 1756196564622
+    "lastSignal": "bullish",
+    "lastCloudColor": "bullish",
+    "lastAlert": 1756479610050
   },
   "obv": {
     "lastDivergence": null,
