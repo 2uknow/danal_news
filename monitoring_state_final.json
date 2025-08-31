@@ -32,15 +32,27 @@
       "time": "시간 미상",
       "asset": "비트코인",
       "sentAt": "2025-08-27T22:48:42.183Z"
+    },
+    {
+      "title": "다날, 스테이블코인 생태계 구축…엑셀라 파트너사 선정",
+      "link": "https://www.newsis.com/view/NISX20250828_0003306243",
+      "press": "뉴시스",
+      "time": "시간 미상",
+      "asset": "다날",
+      "sentAt": "2025-08-31T04:45:46.225Z"
+    },
+    {
+      "title": "비트코인 '美 개인소비지출 지수 상승'에 10만8천달러대 하락",
+      "link": "https://www.yna.co.kr/view/AKR20250830002100091?input=1195m",
+      "press": "연합뉴스",
+      "time": "24시간 전",
+      "asset": "비트코인",
+      "sentAt": "2025-08-31T04:46:01.254Z"
     }
   ],
   "assetStates": {
     "페이코인": {
       "priceHistory": [
-        120,
-        120,
-        119,
-        119,
         119,
         120,
         120,
@@ -96,18 +108,22 @@
         120,
         120,
         120,
-        120
+        120,
+        139,
+        139,
+        139,
+        140
       ],
-      "lastAlertPrice": 121,
+      "lastAlertPrice": 139,
       "lastReportPrice": 120,
-      "wasInDeviation": false,
-      "lastTrendAlertTime": 1756084441035,
-      "openingPrice": 120,
-      "openingPriceDate": "2025-08-28",
+      "wasInDeviation": true,
+      "lastTrendAlertTime": 1756615561413,
+      "openingPrice": 139,
+      "openingPriceDate": "2025-08-31",
       "addedDate": "2025-08-18T00:11:54.016Z",
-      "totalAlerts": 23,
-      "lastUpdate": "2025-08-28T00:02:01.238Z",
-      "lastTrendAlertPrice": 124,
+      "totalAlerts": 25,
+      "lastUpdate": "2025-08-31T04:48:00.616Z",
+      "lastTrendAlertPrice": 139,
       "trendAlertDirection": "up"
     },
     "다날": {
@@ -213,10 +229,6 @@
     },
     "비트코인": {
       "priceHistory": [
-        155839000,
-        155801000,
-        155770000,
-        155770000,
         155850000,
         155881000,
         155881000,
@@ -272,25 +284,26 @@
         155584000,
         155521000,
         155521000,
-        155609000
+        155609000,
+        151527000,
+        151527000,
+        151620000,
+        151620000
       ],
-      "lastAlertPrice": 0,
+      "lastAlertPrice": 151527000,
       "lastReportPrice": 155549000,
-      "wasInDeviation": false,
-      "lastTrendAlertTime": 0,
-      "openingPrice": 155521000,
-      "openingPriceDate": "2025-08-28",
+      "wasInDeviation": true,
+      "lastTrendAlertTime": 1756615547076,
+      "openingPrice": 151527000,
+      "openingPriceDate": "2025-08-31",
       "addedDate": "2025-08-18T00:11:54.017Z",
-      "totalAlerts": 0,
-      "lastUpdate": "2025-08-28T00:02:02.850Z",
-      "lastTrendAlertPrice": 0
+      "totalAlerts": 1,
+      "lastUpdate": "2025-08-31T04:48:01.125Z",
+      "lastTrendAlertPrice": 151527000,
+      "trendAlertDirection": "down"
     },
     "이더리움": {
       "priceHistory": [
-        6340000,
-        6339000,
-        6339000,
-        6341000,
         6341000,
         6345000,
         6345000,
@@ -346,26 +359,26 @@
         6298000,
         6298000,
         6302000,
-        6302000
+        6302000,
+        6217000,
+        6214000,
+        6214000,
+        6226000
       ],
       "lastAlertPrice": 6392000,
       "lastReportPrice": 6289000,
       "wasInDeviation": false,
       "lastTrendAlertTime": 1756212543289,
-      "openingPrice": 6298000,
-      "openingPriceDate": "2025-08-28",
+      "openingPrice": 6217000,
+      "openingPriceDate": "2025-08-31",
       "addedDate": "2025-08-18T00:11:54.017Z",
       "totalAlerts": 8,
-      "lastUpdate": "2025-08-28T00:02:03.580Z",
+      "lastUpdate": "2025-08-31T04:48:01.628Z",
       "lastTrendAlertPrice": 6392000,
       "trendAlertDirection": "up"
     },
     "리플": {
       "priceHistory": [
-        4168,
-        4166,
-        4166,
-        4167,
         4167,
         4173,
         4173,
@@ -421,24 +434,28 @@
         4152,
         4153,
         4157,
-        4155
+        4155,
+        3962,
+        3959,
+        3961,
+        3963
       ],
-      "lastAlertPrice": 4217,
+      "lastAlertPrice": 3959,
       "lastReportPrice": 4148,
-      "wasInDeviation": false,
-      "lastTrendAlertTime": 1756048329260,
-      "openingPrice": 4153,
-      "openingPriceDate": "2025-08-28",
+      "wasInDeviation": true,
+      "lastTrendAlertTime": 1756615562952,
+      "openingPrice": 3962,
+      "openingPriceDate": "2025-08-31",
       "addedDate": "2025-08-18T00:11:54.017Z",
-      "totalAlerts": 4,
-      "lastUpdate": "2025-08-28T00:02:04.431Z",
-      "lastTrendAlertPrice": 4217,
-      "trendAlertDirection": "up"
+      "totalAlerts": 6,
+      "lastUpdate": "2025-08-31T04:48:02.118Z",
+      "lastTrendAlertPrice": 3959,
+      "trendAlertDirection": "down"
     }
   },
-  "lastPeriodicReportTime": 1756338540111,
+  "lastPeriodicReportTime": 1756615545745,
   "newsSearchState": {
     "currentAssetIndex": 0,
-    "lastSearchTime": 1756339320304
+    "lastSearchTime": 1756615680017
   }
 }
