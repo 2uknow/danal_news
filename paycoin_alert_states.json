@@ -8,9 +8,9 @@
     "lastAlert": 0
   },
   "fibonacci": {
-    "lastLevel": "50.0%",
-    "lastPrice": 148,
-    "lastAlert": 1756652411089
+    "lastLevel": "61.8%",
+    "lastPrice": 141,
+    "lastAlert": 1756724411292
   },
   "ichimoku": {
     "lastSignal": "bullish",
@@ -22,7 +22,7 @@
     "lastAlert": 0
   },
   "vwap": {
-    "lastDeviation": null,
-    "lastAlert": 0
+    "lastDeviation": -6.340331127480839,
+    "lastAlert": 1756764006086
   }
 }
